@@ -44,7 +44,11 @@ export default function InstallPrompt() {
   }
 
   if (showIosHint) {
-    return <div className="install-hint">Tap Share → Add to Home Screen</div>
+    return (
+      <div className="install-hint">
+        <span aria-hidden="true">📤</span> Add to Home Screen
+      </div>
+    )
   }
 
   return null
