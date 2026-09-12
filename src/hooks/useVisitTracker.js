@@ -69,5 +69,18 @@ export function useVisitTracker() {
     saveVisits([])
   }
 
-  return { position, visits, geoError, placeError, clearVisits }
+  // Attaches a submitted check-in (star rating, note, photo) to the visit it
+  // was left for, so Visit history can show what the user actually did there
+  // instead of just the timestamp.
+  function markVisitReviewed(visitId, { rating, body, photoUrl }) {
+    setVisits((prev) => {
+      const next = prev.map((visit) =>
+        visit.id === visitId ? { ...visit, rating, reviewBody: body, photoUrl } : visit,
+      )
+      saveVisits(next)
+      return next
+    })
+  }
+
+  return { position, visits, geoError, placeError, clearVisits, markVisitReviewed }
 }

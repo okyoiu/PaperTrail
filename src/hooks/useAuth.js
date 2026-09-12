@@ -22,5 +22,5 @@ export function useAuth() {
     ensureProfile(user).then(setProfile)
   }, [user])
 
-  return { user, profile }
+  return { user, profile, setProfile }
 }

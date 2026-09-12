@@ -5,9 +5,14 @@ const REVIEW_PHOTOS_BUCKET = 'review-photos'
 
 // --- Auth -------------------------------------------------------------
 
-// Fastest sign-in path for a demo: email magic link, no password.
+// Fastest sign-in path for a demo: email magic link, no password. The link
+// returns to this origin if it's in Supabase Auth's Redirect URLs allowlist,
+// otherwise Supabase falls back to the project's Site URL.
 export async function signInWithEmail(email) {
-  const { error } = await supabase.auth.signInWithOtp({ email })
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  })
   if (error) throw error
 }
 
@@ -69,18 +74,24 @@ async function upsertLocation(place) {
 // --- Reviews / XP -----------------------------------------------------------
 
 async function uploadReviewPhoto(userId, photoFile) {
-  const path = `${userId}/${crypto.randomUUID()}-${photoFile.name}`
-  const { error } = await supabase.storage.from(REVIEW_PHOTOS_BUCKET).upload(path, photoFile)
-  if (error) throw error
+  // Not reusing the file name: Storage rejects keys with non-ASCII characters
+  // (e.g. the narrow space in macOS screenshot names).
+  const extension = /\.([a-z0-9]{1,5})$/i.exec(photoFile.name ?? '')?.[1]?.toLowerCase() ?? 'jpg'
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`
+  const { error } = await supabase.storage
+    .from(REVIEW_PHOTOS_BUCKET)
+    .upload(path, photoFile, { contentType: photoFile.type || undefined })
+  if (error) throw new Error(`Photo upload failed: ${error.message}`)
 
   const { data } = supabase.storage.from(REVIEW_PHOTOS_BUCKET).getPublicUrl(path)
   return data.publicUrl
 }
 
 // place: the location the user is standing at/reviewing ({ placeId, name,
-// address, lat, lng } - a Google place or an `osm:<id>` building). photoFile
-// is optional (a File/Blob from CameraCapture).
-export async function submitReview({ userId, place, body, photoFile }) {
+// address, lat, lng } - a Google place, an `osm:<id>` building, or a
+// `pin:<lat>,<lng>` spot). rating is 1-5 stars. photoFile is optional (a
+// File/Blob from CameraCapture).
+export async function submitReview({ userId, place, rating, body, photoFile }) {
   const location = await upsertLocation(place)
   const photoUrl = photoFile ? await uploadReviewPhoto(userId, photoFile) : null
 
@@ -89,11 +100,12 @@ export async function submitReview({ userId, place, body, photoFile }) {
     .insert({
       user_id: userId,
       location_id: location.id,
+      rating,
       body,
       photo_url: photoUrl,
       xp_awarded: REVIEW_XP_AWARD,
     })
-    .select()
+    .select('*, locations(id, name, lat, lng)')
     .single()
   if (error) throw error
 
@@ -105,6 +117,17 @@ export async function submitReview({ userId, place, body, photoFile }) {
 
   const profile = await getProfile(userId)
   return { review, profile }
+}
+
+// Newest first, each with the place it was left at (for the map's book icons).
+export async function getMyReviews(userId) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, body, photo_url, created_at, locations(id, name, lat, lng)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 // --- Unlocks (fog of war) ---------------------------------------------------
