@@ -3,6 +3,8 @@ import CameraCapture from '../mobile/CameraCapture'
 import { submitReview } from '../backend/api'
 import { XP_PER_REVIEW } from './xp'
 
+// location: { id: placeId, name, lat, lng } - a Google place or an
+// `osm:<id>` building (see MapView's onSelectLocation).
 export default function ReviewForm({ userId, location, onDone, onCancel }) {
   const [body, setBody] = useState('')
   const [photoFile, setPhotoFile] = useState(null)
@@ -14,8 +16,9 @@ export default function ReviewForm({ userId, location, onDone, onCancel }) {
     setSubmitting(true)
     setError(null)
     try {
-      await submitReview({ userId, locationId: location.id, body, photoFile })
-      onDone()
+      const place = { placeId: location.id, name: location.name, lat: location.lat, lng: location.lng }
+      const result = await submitReview({ userId, place, body, photoFile })
+      onDone(result)
     } catch (err) {
       setError(err.message)
       setSubmitting(false)

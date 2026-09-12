@@ -1,13 +1,11 @@
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Mobile role: add real icons to public/icons/ then list them under manifest.icons below.
 export default defineConfig({
   server: {
     // Dev-only: lets tunnel tools (cloudflared/ngrok) reach the dev server.
     // Their hostname is random per run, so we allow all rather than hardcode one.
-    // this is also used for debugging services (just a quick note)
     allowedHosts: true,
   },
   plugins: [
@@ -29,4 +27,10 @@ export default defineConfig({
       },
     }),
   ],
+  // maplibre-gl spins up its own worker via a URL Vite's dep optimizer
+  // doesn't handle correctly when pre-bundled - excluding it avoids a
+  // "maplibre-gl-worker.mjs" 404 that silently breaks map rendering.
+  optimizeDeps: {
+    exclude: ['maplibre-gl'],
+  },
 })

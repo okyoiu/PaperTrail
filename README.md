@@ -3,11 +3,13 @@
 Pokémon-Go-style location game. Players walk around, a Shadow-of-War-style fog
 lifts around real 3D buildings (rendered from OpenStreetMap data via
 osmium-tool) as they explore, and they earn XP for leaving reviews at real
-places (pulled from Google Places).
+places (pulled from Google Places). A friends map (Life360-style) lets
+signed-in users see each other's live location once a friend request is
+accepted.
 
 ## Stack
 
-- **Frontend**: React + Vite, packaged as an installable PWA (no App Store needed — open a URL on a phone, "Add to Home Screen").
+- **Frontend**: React + Vite, packaged as an installable PWA (no App Store needed — open a URL on a phone, "Add to Home Screen"). Routed as a small mobile app: Map / Friends / Login tabs (`src/pages/`, `src/App.jsx`).
 - **Map/3D**: MapLibre GL JS + building footprints extracted from OpenStreetMap with `osmium-tool` (see `public/data/README.md`).
 - **Places data**: Google Places API, proxied through `api/places.js` so the key never reaches the browser.
 - **Backend/DB**: Supabase (Postgres + Auth + Storage) — see `supabase/README.md`.
@@ -22,8 +24,9 @@ Each role owns a folder — work in parallel without stepping on each other's fi
 | **Frontend / Map** | `src/features/map/` | `MapView.jsx` (MapLibre setup), `buildingsLayer.js` (3D extrusion), `FogOfWar.jsx` (canvas fog), also owns generating `public/data/buildings.geojson` via osmium-tool |
 | **Backend / Data** | `src/features/backend/`, `src/features/game/`, `api/`, `supabase/` | `api.js` (Supabase calls), `xp.js` (leveling math), `places.js` (Google Places proxy), `schema.sql` (DB schema + RLS) |
 | **Mobile** | `src/features/mobile/` | `useGeolocation.js`, `CameraCapture.jsx`, `InstallPrompt.jsx`, PWA manifest in `vite.config.js`, on-device testing/polish |
+| **Social / App shell** | `src/pages/`, `src/components/`, `src/features/social/` | Login/Map/Add-friend pages + bottom nav, friend requests, friends live map |
 
-`src/App.jsx` is the shared wiring file — it imports from all three folders. Keep changes there small and coordinate before editing it, since it's the one place all three roles touch.
+`src/App.jsx` is the shared wiring file — it renders the page router. Keep changes there small and coordinate before editing it, since it's the one place every role touches.
 
 ## Setup
 
