@@ -7,8 +7,9 @@ import { getUnlockedLocations, unlockLocation } from '../backend/api'
 import {
   addBuildingsLayer,
   DEFAULT_CENTER,
-  fetchBuildingsNear,
-  mergeBuildingsIntoSource,
+  fetchAllBuildings,
+  getBuildingsLayerId,
+  setAllBuildings,
   setBuildingUnlocked,
 } from './buildingsLayer'
 import { FogOfWar } from './FogOfWar'
@@ -16,12 +17,6 @@ import { TeleportControls } from './TeleportControls'
 import { loadVisitedBuildingIds, saveVisitedBuilding } from './visitedBuildingsStore'
 
 const UNLOCK_RADIUS_METERS = 30
-// How much area around the player is loaded at once, and how far they need
-// to move before loading more. Not a hard range limit - the player can walk
-// anywhere; this just keeps each Overpass request (and the browser's
-// building count) small instead of loading a whole city at once.
-const LOAD_RADIUS_METERS = 500
-const REFETCH_TRIGGER_METERS = 250
 const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 function osmIdFromPlaceId(placeId) {
@@ -31,17 +26,17 @@ function osmIdFromPlaceId(placeId) {
 
 // Ties the pieces together: MapLibre + 3D building extrusion + fog-of-war.
 // Buildings stay flat/dark ("foggy") until the player's GPS (or a debug
-// teleport) comes within UNLOCK_RADIUS_METERS, at which point they pop up in
-// 3D and get persisted - to localStorage always, and to Supabase too when
-// signed in - so they stay revealed later. See buildingsLayer.js for how
-// building data is loaded incrementally around wherever the player is.
-export function MapView({ userId }) {
+// teleport/click) comes within UNLOCK_RADIUS_METERS, at which point they pop
+// up in 3D and get persisted - to localStorage always, and to Supabase too
+// when signed in - so they stay revealed later. Building footprints are the
+// pre-baked public/data/buildings.geojson (see buildingsLayer.js), loaded
+// once rather than fetched live.
+export function MapView({ userId, onSelectLocation }) {
   const containerRef = useRef(null)
   const [map, setMap] = useState(null)
-  const buildingsByIdRef = useRef(new Map()) // OSM way id -> GeoJSON feature
+  const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
   const visitedIdsRef = useRef(new Set()) // known-visited before this session even renders them
-  const lastFetchCenterRef = useRef(null)
   const { position: realPosition, error: geoError } = useGeolocation()
   const [debugPreset, setDebugPreset] = useState(null)
   const position = debugPreset ?? realPosition
@@ -61,7 +56,7 @@ export function MapView({ userId }) {
     instance.on('load', async () => {
       addBuildingsLayer(instance)
 
-      // A failed Overpass/Supabase call here must never prevent setMap() -
+      // A failed fetch/Supabase call here must never prevent setMap() -
       // otherwise every button that depends on `map` (teleport, simulate,
       // the position marker) silently stops working with no visible error.
       try {
@@ -79,16 +74,16 @@ export function MapView({ userId }) {
         }
         visitedIdsRef.current = visited
 
-        const geojson = await fetchBuildingsNear(DEFAULT_CENTER, LOAD_RADIUS_METERS)
-        mergeBuildingsIntoSource(instance, buildingsByIdRef.current, geojson)
-        lastFetchCenterRef.current = DEFAULT_CENTER
+        const geojson = await fetchAllBuildings()
+        for (const feature of geojson.features) buildingsByIdRef.current.set(feature.id, feature)
+        setAllBuildings(instance, geojson)
         for (const id of visited) {
           if (!buildingsByIdRef.current.has(id)) continue
           unlockedIdsRef.current.add(id)
           setBuildingUnlocked(instance, id, true)
         }
       } catch (err) {
-        console.error('Failed to load initial buildings:', err)
+        console.error('Failed to load buildings:', err)
       } finally {
         setMap(instance)
       }
@@ -96,28 +91,6 @@ export function MapView({ userId }) {
 
     return () => instance.remove()
   }, [userId])
-
-  // Load more buildings as the player moves, instead of everything upfront.
-  useEffect(() => {
-    if (!map || !position) return
-    const last = lastFetchCenterRef.current
-    if (last && distanceMeters(last, position) < REFETCH_TRIGGER_METERS) return
-    lastFetchCenterRef.current = position
-
-    fetchBuildingsNear(position, LOAD_RADIUS_METERS)
-      .then((geojson) => {
-        mergeBuildingsIntoSource(map, buildingsByIdRef.current, geojson)
-        for (const id of visitedIdsRef.current) {
-          if (unlockedIdsRef.current.has(id) || !buildingsByIdRef.current.has(id)) continue
-          unlockedIdsRef.current.add(id)
-          setBuildingUnlocked(map, id, true)
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load nearby buildings:', err)
-        lastFetchCenterRef.current = last // allow retrying once the player moves again
-      })
-  }, [map, position])
 
   // "You are here" marker.
   const markerRef = useRef(null)
@@ -179,6 +152,31 @@ export function MapView({ userId }) {
       setBuildingUnlocked(map, id, true)
     }
   }
+
+  // Click a building that's already unlocked to review it (leave a photo/note,
+  // earn XP - see MapPage). Click anywhere else to drop the "you are here"
+  // debug dot there, so exploration can be tested without real GPS.
+  useEffect(() => {
+    if (!map) return
+    function onClick(e) {
+      const [hit] = map.queryRenderedFeatures(e.point, { layers: [getBuildingsLayerId()] })
+      if (hit && hit.state?.unlocked && onSelectLocation) {
+        const building = buildingsByIdRef.current.get(hit.id)
+        if (building) {
+          onSelectLocation({
+            id: `osm:${hit.id}`,
+            name: building.properties.name,
+            lat: building.properties.centroid.lat,
+            lng: building.properties.centroid.lng,
+          })
+          return
+        }
+      }
+      setDebugPreset({ name: 'Custom location', lat: e.lngLat.lat, lng: e.lngLat.lng })
+    }
+    map.on('click', onClick)
+    return () => map.off('click', onClick)
+  }, [map, onSelectLocation])
 
   return (
     <div style={{ position: 'relative', height: '460px', width: '100%' }}>

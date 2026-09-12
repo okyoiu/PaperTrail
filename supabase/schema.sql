@@ -1,6 +1,7 @@
 -- Run this in the Supabase SQL editor for your project.
+-- Safe to re-run: tables use IF NOT EXISTS, policies are dropped before recreation.
 
-create table profiles (
+create table if not exists profiles (
   id uuid references auth.users primary key,
   username text unique,
   persona_id text, -- placeholder: wire up persona-identity track here once specced
@@ -9,7 +10,7 @@ create table profiles (
   created_at timestamptz not null default now()
 );
 
-create table locations (
+create table if not exists locations (
   id uuid primary key default gen_random_uuid(),
   google_place_id text unique,
   name text not null,
@@ -19,14 +20,14 @@ create table locations (
   created_at timestamptz not null default now()
 );
 
-create table unlocks (
+create table if not exists unlocks (
   user_id uuid references profiles(id) not null,
   location_id uuid references locations(id) not null,
   unlocked_at timestamptz not null default now(),
   primary key (user_id, location_id)
 );
 
-create table reviews (
+create table if not exists reviews (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) not null,
   location_id uuid references locations(id) not null,
@@ -52,27 +53,43 @@ alter table profiles enable row level security;
 alter table reviews enable row level security;
 alter table unlocks enable row level security;
 
+drop policy if exists "profiles are viewable by everyone" on profiles;
 create policy "profiles are viewable by everyone" on profiles for select using (true);
+
+drop policy if exists "users can insert own profile" on profiles;
 create policy "users can insert own profile" on profiles for insert with check (auth.uid() = id);
+
+drop policy if exists "users can update own profile" on profiles;
 create policy "users can update own profile" on profiles for update using (auth.uid() = id);
 
+drop policy if exists "reviews are viewable by everyone" on reviews;
 create policy "reviews are viewable by everyone" on reviews for select using (true);
+
+drop policy if exists "users can insert their own reviews" on reviews;
 create policy "users can insert their own reviews" on reviews for insert with check (auth.uid() = user_id);
 
+drop policy if exists "unlocks are viewable by everyone" on unlocks;
 create policy "unlocks are viewable by everyone" on unlocks for select using (true);
+
+drop policy if exists "users can insert their own unlocks" on unlocks;
 create policy "users can insert their own unlocks" on unlocks for insert with check (auth.uid() = user_id);
 
 -- Storage: run this after creating the "review-photos" bucket in the dashboard.
 -- A "public" bucket only makes files publicly readable by URL; writes still
 -- need an explicit policy on storage.objects, which is what this adds.
+drop policy if exists "review photos are viewable by everyone" on storage.objects;
 create policy "review photos are viewable by everyone" on storage.objects
   for select using (bucket_id = 'review-photos');
-create policy "authenticated users can upload review photos" on storage.objects
-  for insert with check (bucket_id = 'review-photos' and auth.role() = 'authenticated');
+
+drop policy if exists "authenticated users can upload review photos" on storage.objects;
+create policy "authenticated users can upload review photos"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'review-photos');
 
 -- --- Friends + live location sharing (Life360-style) ---------------------
 
-create table friend_requests (
+create table if not exists friend_requests (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid references profiles(id) not null,
   addressee_id uuid references profiles(id) not null,
@@ -84,7 +101,7 @@ create table friend_requests (
 
 -- One row per user: their most recent known position. Overwritten on every
 -- update rather than logged, since only "where are they right now" matters.
-create table live_locations (
+create table if not exists live_locations (
   user_id uuid references profiles(id) primary key,
   lat double precision not null,
   lng double precision not null,
@@ -94,18 +111,26 @@ create table live_locations (
 alter table friend_requests enable row level security;
 alter table live_locations enable row level security;
 
+drop policy if exists "users see requests they sent or received" on friend_requests;
 create policy "users see requests they sent or received" on friend_requests
   for select using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+drop policy if exists "users can send a friend request" on friend_requests;
 create policy "users can send a friend request" on friend_requests
   for insert with check (auth.uid() = requester_id);
+
+drop policy if exists "addressee can accept or decline, requester can cancel" on friend_requests;
 create policy "addressee can accept or decline, requester can cancel" on friend_requests
   for update using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+drop policy if exists "requester or addressee can delete a request" on friend_requests;
 create policy "requester or addressee can delete a request" on friend_requests
   for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
 -- The core of the "only friends can see your dot" rule: a user can select
 -- their own row, or a row belonging to someone they have an accepted
 -- friend_requests row with (in either direction).
+drop policy if exists "see own location or an accepted friend's location" on live_locations;
 create policy "see own location or an accepted friend's location" on live_locations
   for select using (
     user_id = auth.uid()
@@ -118,8 +143,12 @@ create policy "see own location or an accepted friend's location" on live_locati
         )
     )
   );
+
+drop policy if exists "users can upsert their own location" on live_locations;
 create policy "users can upsert their own location" on live_locations
   for insert with check (user_id = auth.uid());
+
+drop policy if exists "users can update their own location" on live_locations;
 create policy "users can update their own location" on live_locations
   for update using (user_id = auth.uid());
 

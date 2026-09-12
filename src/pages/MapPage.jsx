@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useFriendsMap } from '../hooks/useFriendsMap'
@@ -5,6 +6,9 @@ import { useVisitTracker } from '../hooks/useVisitTracker'
 import { isSupabaseConfigured } from '../services/supabaseClient'
 import { FriendsMap } from '../features/map/FriendsMap'
 import { MapView } from '../features/map/MapView'
+import LocationCard from '../features/game/LocationCard'
+import ReviewForm from '../features/game/ReviewForm'
+import { levelForXp } from '../features/game/xp'
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString()
@@ -36,11 +40,19 @@ function FriendsMapSection() {
 }
 
 export function MapPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { position, visits, geoError, placeError, clearVisits } = useVisitTracker()
+  const [selectedLocation, setSelectedLocation] = useState(null)
+  const [reviewingLocation, setReviewingLocation] = useState(null)
 
   return (
     <div className="page">
+      {user && profile && (
+        <div className="xp-badge" style={{ marginBottom: '1rem' }}>
+          Lv. {levelForXp(profile.xp)} · {profile.xp} XP
+        </div>
+      )}
+
       <section className="status">
         {geoError && <p className="error">Location error: {geoError}</p>}
         {placeError && <p className="error">Place lookup error: {placeError}</p>}
@@ -57,16 +69,16 @@ export function MapPage() {
       <section className="explore">
         <h2>Explore (fog of war)</h2>
         <p>
-          Walk toward a building and it reveals in 3D; Rice Village stays flat and dark until
-          you actually visit it.
+          Walk toward a building and it reveals in 3D; click an unlocked one to leave a review
+          and earn XP.
           {!user && (
             <>
               {' '}
-              <Link to="/login">Sign in</Link> to save your progress.
+              <Link to="/login">Sign in</Link> to save your progress and review places.
             </>
           )}
         </p>
-        <MapView userId={user?.id} />
+        <MapView userId={user?.id} onSelectLocation={user ? setSelectedLocation : undefined} />
       </section>
 
       <FriendsMapSection />
@@ -95,6 +107,26 @@ export function MapPage() {
           </ul>
         )}
       </section>
+
+      {reviewingLocation ? (
+        <ReviewForm
+          userId={user?.id}
+          location={reviewingLocation}
+          onCancel={() => setReviewingLocation(null)}
+          onDone={() => {
+            setReviewingLocation(null)
+            setSelectedLocation(null)
+          }}
+        />
+      ) : (
+        selectedLocation && (
+          <LocationCard
+            location={selectedLocation}
+            onReview={setReviewingLocation}
+            onClose={() => setSelectedLocation(null)}
+          />
+        )
+      )}
     </div>
   )
 }

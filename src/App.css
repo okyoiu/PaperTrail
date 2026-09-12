@@ -1,4 +1,5 @@
 .app-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   max-width: 430px;
@@ -12,6 +13,10 @@
 
 .app-topbar {
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.9rem 1rem;
   border-bottom: 1px solid #e4e4e7;
 }

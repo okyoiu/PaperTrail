@@ -44,9 +44,10 @@ export async function getProfile(userId) {
 
 // --- Locations ------------------------------------------------------------
 
-// Reviews/unlocks reference locations.id, but the frontend only knows a
-// Google place (see src/services/googlePlaces.js). Upsert-on-google_place_id
-// keeps that mapping stable across repeated visits to the same place.
+// Reviews/unlocks reference locations.id, but the frontend only knows either
+// a Google place (see src/services/googlePlaces.js) or an OSM building
+// (`osm:<way id>`, see features/map/buildingsLayer.js). Upsert-on-
+// google_place_id keeps that mapping stable across repeated visits/reviews.
 async function upsertLocation(place) {
   const { data, error } = await supabase
     .from('locations')
@@ -76,8 +77,9 @@ async function uploadReviewPhoto(userId, photoFile) {
   return data.publicUrl
 }
 
-// place: the resolved Google place ({ placeId, name, address, lat, lng }) the
-// user is standing at. photoFile is optional (a File/Blob from CameraCapture).
+// place: the location the user is standing at/reviewing ({ placeId, name,
+// address, lat, lng } - a Google place or an `osm:<id>` building). photoFile
+// is optional (a File/Blob from CameraCapture).
 export async function submitReview({ userId, place, body, photoFile }) {
   const location = await upsertLocation(place)
   const photoUrl = photoFile ? await uploadReviewPhoto(userId, photoFile) : null

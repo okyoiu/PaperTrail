@@ -1,17 +1,13 @@
-// Building footprints for the fog-of-war layer, pulled live from OpenStreetMap
-// via the Overpass API. No API key, no pre-extraction step — good enough for
-// a demo; swap for a pre-baked public/data/buildings.geojson (osmium-tool)
-// if Overpass is too slow/rate-limited for a real deployment.
+// Building footprints for the fog-of-war layer, pre-extracted from
+// OpenStreetMap with osmium-tool into public/data/buildings.geojson (see
+// public/data/README.md) — no live API calls, no rate limits, works offline
+// once loaded.
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
-
+const BUILDINGS_URL = '/data/buildings.geojson'
 const BUILDINGS_SOURCE_ID = 'campus-buildings'
 const BUILDINGS_LAYER_ID = 'campus-buildings-extrusion'
 
-// Just the initial map center before a real or debug position is known.
-// Building loading itself isn't tied to any fixed area or bounding box - it
-// follows the player's current position wherever that is (see
-// fetchBuildingsNear), so this works anywhere, not only near Rice.
+// Rice University, used as the initial map center.
 export const DEFAULT_CENTER = { lat: 29.7174, lng: -95.4018 }
 
 // OSM height data is inconsistent - prefer an explicit height tag, fall back
@@ -48,9 +44,11 @@ function estimateHeight(tags = {}) {
 }
 
 // Centroid of a building's outer ring - good enough for "am I near this
-// building" at building scale, not a true polygon centroid.
-function ringCentroid(coords) {
-  const ring = coords[0]
+// building" at building scale, not a true polygon centroid. Handles both
+// Polygon and MultiPolygon (osmium-tool emits MultiPolygon for buildings
+// with courtyards/holes) by using the first polygon's outer ring.
+function ringCentroid(geometry) {
+  const ring = geometry.type === 'MultiPolygon' ? geometry.coordinates[0][0] : geometry.coordinates[0]
   const sum = ring.reduce((acc, [lng, lat]) => ({ lng: acc.lng + lng, lat: acc.lat + lat }), {
     lng: 0,
     lat: 0,
@@ -58,58 +56,23 @@ function ringCentroid(coords) {
   return { lat: sum.lat / ring.length, lng: sum.lng / ring.length }
 }
 
-// A bounding box around a point, sized in meters rather than degrees so the
-// caller doesn't have to think about latitude distortion.
-function boundsAroundPoint({ lat, lng }, radiusMeters) {
-  const latDelta = radiusMeters / 111320
-  const lngDelta = radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180))
-  return { south: lat - latDelta, north: lat + latDelta, west: lng - lngDelta, east: lng + lngDelta }
-}
+// Fetches the whole pre-baked building set once. Static data, so there's no
+// per-move refetching the way a live Overpass query would need.
+export async function fetchAllBuildings() {
+  const res = await fetch(BUILDINGS_URL)
+  if (!res.ok) throw new Error(`Failed to load ${BUILDINGS_URL}: ${res.status}`)
+  const data = await res.json()
 
-// Fetches only the buildings near one point, not a whole region - a 50-mile
-// radius query would return millions of features and time out Overpass (and
-// the browser). Instead this gets called again each time the player moves
-// far enough, so in practice they can walk anywhere without a hard limit.
-async function queryOverpass(query) {
-  const res = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-  })
-  if (!res.ok) throw new Error(`Overpass request failed: ${res.status}`)
-  return res.json()
-}
-
-export async function fetchBuildingsNear(center, radiusMeters) {
-  const bbox = boundsAroundPoint(center, radiusMeters)
-  const query = `[out:json][timeout:25];way["building"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});out geom;`
-
-  // The public Overpass instance is sometimes overloaded (504s under load) -
-  // one retry after a short delay meaningfully improves reliability during a
-  // live demo without hammering it.
-  let data
-  try {
-    data = await queryOverpass(query)
-  } catch {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    data = await queryOverpass(query)
-  }
-
-  const features = data.elements
-    .filter((el) => el.type === 'way' && el.geometry?.length > 2)
-    .map((way) => {
-      const coordinates = [way.geometry.map((pt) => [pt.lon, pt.lat])]
-      return {
-        type: 'Feature',
-        id: way.id,
-        geometry: { type: 'Polygon', coordinates },
-        properties: {
-          name: way.tags?.name ?? 'Unnamed building',
-          centroid: ringCentroid(coordinates),
-          render_height: estimateHeight(way.tags),
-        },
-      }
-    })
+  const features = data.features.map((feature, index) => ({
+    ...feature,
+    id: index, // stable as long as the file's feature order doesn't change
+    properties: {
+      ...feature.properties,
+      name: feature.properties?.name ?? 'Unnamed building',
+      centroid: ringCentroid(feature.geometry),
+      render_height: estimateHeight(feature.properties),
+    },
+  }))
 
   return { type: 'FeatureCollection', features }
 }
@@ -131,7 +94,7 @@ function configureOsmBuildingsLight(map) {
 // Adds the buildings source + a fill-extrusion layer whose height/color read
 // from each feature's `unlocked` feature-state - locked buildings render as
 // flat dark silhouettes (the "fog"), unlocked ones pop up in 3D. Starts empty;
-// see mergeBuildingsIntoSource for how features get added as the player moves.
+// see setAllBuildings for how the pre-baked features get loaded in.
 export function addBuildingsLayer(map) {
   configureOsmBuildingsLight(map)
   map.addSource(BUILDINGS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -168,12 +131,10 @@ export function setBuildingUnlocked(map, featureId, unlocked = true) {
   map.setFeatureState({ source: BUILDINGS_SOURCE_ID, id: featureId }, { unlocked })
 }
 
-// Adds newly-fetched buildings to the source without dropping ones fetched
-// earlier (e.g. buildings back near where the player started) - `byId` is
-// the running set of every feature seen so far, keyed by OSM way id.
-export function mergeBuildingsIntoSource(map, byId, newGeojson) {
-  for (const feature of newGeojson.features) {
-    if (!byId.has(feature.id)) byId.set(feature.id, feature)
-  }
-  map.getSource(BUILDINGS_SOURCE_ID).setData({ type: 'FeatureCollection', features: [...byId.values()] })
+export function setAllBuildings(map, geojson) {
+  map.getSource(BUILDINGS_SOURCE_ID).setData(geojson)
+}
+
+export function getBuildingsLayerId() {
+  return BUILDINGS_LAYER_ID
 }

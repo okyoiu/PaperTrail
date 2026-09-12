@@ -3,6 +3,8 @@
 
 export const XP_PER_LEVEL = 100
 export const REVIEW_XP_AWARD = 25
+// Alias kept for game/LocationCard.jsx and game/ReviewForm.jsx.
+export const XP_PER_REVIEW = REVIEW_XP_AWARD
 
 export function levelForXp(xp) {
   return Math.floor(xp / XP_PER_LEVEL) + 1

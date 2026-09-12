@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { BottomNav } from './components/BottomNav'
+import InstallPrompt from './features/mobile/InstallPrompt'
 import { AddFriendPage } from './pages/AddFriendPage'
 import { LoginPage } from './pages/LoginPage'
 import { MapPage } from './pages/MapPage'
@@ -10,6 +11,7 @@ function App() {
     <div className="app-shell">
       <header className="app-topbar">
         <h1>Visit Tracker</h1>
+        <InstallPrompt />
       </header>
 
       <main className="app-content">

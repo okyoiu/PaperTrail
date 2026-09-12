@@ -73,6 +73,9 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
       >
         Simulate explored
       </button>
+      <span style={{ color: '#8a9aa1', fontSize: 11 }}>
+        Click the map to move here, or an unlocked building to review it
+      </span>
     </div>
   )
 }
