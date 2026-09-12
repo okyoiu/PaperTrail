@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
+import { Map as MapLibreMap, Marker, NavigationControl, Popup } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useGeolocation } from '../../hooks/useGeolocation'
 import { distanceMeters } from '../../utils/geo'
 import { getUnlockedLocations, unlockLocation } from '../backend/api'
 import {
@@ -11,6 +10,7 @@ import {
   getBuildingsLayerId,
   setAllBuildings,
   setBuildingUnlocked,
+  UNNAMED_BUILDING,
 } from './buildingsLayer'
 import { FogOfWar } from './FogOfWar'
 import { TeleportControls } from './TeleportControls'
@@ -24,22 +24,57 @@ function osmIdFromPlaceId(placeId) {
   return match ? Number(match[1]) : null
 }
 
-// Ties the pieces together: MapLibre + 3D building extrusion + fog-of-war.
-// Buildings stay flat/dark ("foggy") until the player's GPS (or a debug
-// teleport/click) comes within UNLOCK_RADIUS_METERS, at which point they pop
-// up in 3D and get persisted - to localStorage always, and to Supabase too
-// when signed in - so they stay revealed later. Building footprints are the
-// pre-baked public/data/buildings.geojson (see buildingsLayer.js), loaded
-// once rather than fetched live.
-export function MapView({ userId, onSelectLocation }) {
+function createElement(tag, className, text) {
+  const node = document.createElement(tag)
+  if (className) node.className = className
+  if (text) node.textContent = text
+  return node
+}
+
+// Built with textContent rather than innerHTML because review text is user input.
+function reviewPopupContent(name, reviews) {
+  const root = createElement('div', 'review-popup')
+  root.append(createElement('strong', null, name))
+  for (const review of reviews) {
+    const item = createElement('div', 'review-popup-item')
+    if (review.rating) {
+      item.append(
+        createElement('div', 'review-popup-stars', '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating)),
+      )
+    }
+    if (review.body) item.append(createElement('p', null, review.body))
+    if (review.photo_url) {
+      const img = createElement('img')
+      img.src = review.photo_url
+      img.alt = ''
+      item.append(img)
+    }
+    root.append(item)
+  }
+  return root
+}
+
+// The one map: MapLibre + 3D fog-of-war buildings, the player's dot (tap it
+// to review where you're standing), accepted friends' dots, and a book icon
+// on every place the player has reviewed.
+export function MapView({
+  userId,
+  position,
+  debugPreset,
+  onSetDebugPosition,
+  geoError,
+  friends,
+  reviews,
+  onSelectLocation,
+  onReviewHere,
+}) {
   const containerRef = useRef(null)
   const [map, setMap] = useState(null)
   const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
-  const visitedIdsRef = useRef(new Set()) // known-visited before this session even renders them
-  const { position: realPosition, error: geoError } = useGeolocation()
-  const [debugPreset, setDebugPreset] = useState(null)
-  const position = debugPreset ?? realPosition
+  const selfMarkerRef = useRef(null)
+  const friendMarkersRef = useRef(new Map()) // user_id -> Marker
+  const bookMarkersRef = useRef([])
 
   // Map + buildings setup (once).
   useEffect(() => {
@@ -53,31 +88,19 @@ export function MapView({ userId, onSelectLocation }) {
     })
     instance.addControl(new NavigationControl(), 'top-right')
 
-    instance.on('load', async () => {
+    // 'style.load' rather than 'load': 'load' waits until every visible tile
+    // has rendered, which left the map unclickable (no dot, no building
+    // clicks) for many seconds on a slow connection or busy GPU.
+    instance.once('style.load', async () => {
       addBuildingsLayer(instance)
 
-      // A failed fetch/Supabase call here must never prevent setMap() -
-      // otherwise every button that depends on `map` (teleport, simulate,
-      // the position marker) silently stops working with no visible error.
+      // A failed fetch here must never prevent setMap() - every control and
+      // marker depends on `map`, and would otherwise silently do nothing.
       try {
-        const visited = loadVisitedBuildingIds()
-        if (userId) {
-          try {
-            const remote = await getUnlockedLocations(userId)
-            for (const { locations: loc } of remote) {
-              const id = osmIdFromPlaceId(loc.google_place_id)
-              if (id !== null) visited.add(id)
-            }
-          } catch (err) {
-            console.error('Failed to load saved visits from Supabase:', err)
-          }
-        }
-        visitedIdsRef.current = visited
-
         const geojson = await fetchAllBuildings()
         for (const feature of geojson.features) buildingsByIdRef.current.set(feature.id, feature)
         setAllBuildings(instance, geojson)
-        for (const id of visited) {
+        for (const id of loadVisitedBuildingIds()) {
           if (!buildingsByIdRef.current.has(id)) continue
           unlockedIdsRef.current.add(id)
           setBuildingUnlocked(instance, id, true)
@@ -90,23 +113,132 @@ export function MapView({ userId, onSelectLocation }) {
     })
 
     return () => instance.remove()
-  }, [userId])
+  }, [])
+
+  // Buildings this user unlocked in earlier sessions or on other devices.
+  useEffect(() => {
+    if (!map || !userId) return
+    getUnlockedLocations(userId)
+      .then((remote) => {
+        for (const { locations: loc } of remote) {
+          const id = osmIdFromPlaceId(loc?.google_place_id)
+          if (id === null || !buildingsByIdRef.current.has(id)) continue
+          unlockedIdsRef.current.add(id)
+          setBuildingUnlocked(map, id, true)
+        }
+      })
+      .catch((err) => console.error('Failed to load saved visits from Supabase:', err))
+  }, [map, userId])
 
   // "You are here" marker.
-  const markerRef = useRef(null)
   useEffect(() => {
     if (!map || !position) return
-    if (!markerRef.current) {
-      const el = document.createElement('div')
-      el.style.cssText =
-        'width:14px;height:14px;border-radius:50%;background:#e8a33d;border:2px solid #241503;box-shadow:0 0 0 4px rgba(232,163,61,0.35)'
-      markerRef.current = new Marker({ element: el })
+    if (!selfMarkerRef.current) {
+      selfMarkerRef.current = new Marker({ element: createElement('div', 'map-marker-self') })
         .setLngLat([position.lng, position.lat])
         .addTo(map)
     } else {
-      markerRef.current.setLngLat([position.lng, position.lat])
+      selfMarkerRef.current.setLngLat([position.lng, position.lat])
     }
   }, [map, position])
+
+  // Tapping your own dot reviews the nearest named building in unlock range,
+  // or else a bare pin that MapPage names.
+  useEffect(() => {
+    const element = selfMarkerRef.current?.getElement()
+    if (!element || !position || !onReviewHere) return
+
+    function handleClick() {
+      let nearest = null
+      let nearestDistance = UNLOCK_RADIUS_METERS
+      for (const building of buildingsByIdRef.current.values()) {
+        if (building.properties.name === UNNAMED_BUILDING) continue
+        const distance = distanceMeters(building.properties.centroid, position)
+        if (distance <= nearestDistance) {
+          nearest = building
+          nearestDistance = distance
+        }
+      }
+
+      onReviewHere(
+        nearest
+          ? {
+              id: `osm:${nearest.id}`,
+              name: nearest.properties.name,
+              lat: nearest.properties.centroid.lat,
+              lng: nearest.properties.centroid.lng,
+            }
+          : {
+              id: `pin:${position.lat.toFixed(4)},${position.lng.toFixed(4)}`,
+              name: null,
+              lat: position.lat,
+              lng: position.lng,
+            },
+      )
+    }
+
+    element.classList.add('is-clickable')
+    element.title = 'Leave a review here'
+    element.addEventListener('click', handleClick)
+    return () => {
+      element.removeEventListener('click', handleClick)
+      element.classList.remove('is-clickable')
+      element.removeAttribute('title')
+    }
+  }, [map, position, onReviewHere])
+
+  // Friends' dots, kept in sync with live_locations.
+  useEffect(() => {
+    if (!map) return
+    const markers = friendMarkersRef.current
+    const visibleIds = new Set()
+
+    for (const friend of friends) {
+      visibleIds.add(friend.user_id)
+      const username = friend.profiles?.username ?? 'Friend'
+      let marker = markers.get(friend.user_id)
+      if (!marker) {
+        const element = createElement('div', 'map-marker-friend', username.charAt(0).toUpperCase())
+        marker = new Marker({ element })
+          .setLngLat([friend.lng, friend.lat])
+          .setPopup(new Popup({ offset: 14, closeButton: false }))
+          .addTo(map)
+        markers.set(friend.user_id, marker)
+      } else {
+        marker.setLngLat([friend.lng, friend.lat])
+      }
+      marker.getPopup().setText(`${username} · updated ${new Date(friend.updated_at).toLocaleTimeString()}`)
+    }
+
+    for (const [id, marker] of markers) {
+      if (visibleIds.has(id)) continue
+      marker.remove()
+      markers.delete(id)
+    }
+  }, [map, friends])
+
+  // One book icon per reviewed place; its popup lists the reviews left there.
+  useEffect(() => {
+    if (!map) return
+    for (const marker of bookMarkersRef.current) marker.remove()
+
+    const byLocation = new Map()
+    for (const review of reviews) {
+      const loc = review.locations
+      if (!loc) continue
+      if (!byLocation.has(loc.id)) byLocation.set(loc.id, { loc, reviews: [] })
+      byLocation.get(loc.id).reviews.push(review)
+    }
+
+    bookMarkersRef.current = [...byLocation.values()].map(({ loc, reviews: reviewsHere }) => {
+      const element = createElement('div', 'map-marker-book', '📖')
+      element.title = `You reviewed ${loc.name}`
+      return new Marker({ element, anchor: 'bottom' })
+        .setLngLat([loc.lng, loc.lat])
+        .setPopup(new Popup({ offset: 24, maxWidth: '240px' }).setDOMContent(reviewPopupContent(loc.name, reviewsHere)))
+        .addTo(map)
+    })
+  }, [map, reviews])
 
   // Reveal buildings the player walks up to, and save that they've been visited.
   useEffect(() => {
@@ -137,7 +269,7 @@ export function MapView({ userId, onSelectLocation }) {
   }, [map, position, userId])
 
   function handleTeleport(preset) {
-    setDebugPreset(preset)
+    onSetDebugPosition(preset)
     map?.flyTo({ center: [preset.lng, preset.lat], zoom: 16 })
   }
 
@@ -153,30 +285,31 @@ export function MapView({ userId, onSelectLocation }) {
     }
   }
 
-  // Click a building that's already unlocked to review it (leave a photo/note,
-  // earn XP - see MapPage). Click anywhere else to drop the "you are here"
-  // debug dot there, so exploration can be tested without real GPS.
+  // Click any building to open its review card (see MapPage). Click anywhere
+  // else to drop the "you are here" debug dot there, so exploration can be
+  // tested without real GPS.
   useEffect(() => {
     if (!map) return
     function onClick(e) {
+      // Clicks on marker/popup DOM elements bubble up to the map too.
+      if (e.originalEvent.target.closest?.('.maplibregl-marker, .maplibregl-popup')) return
+
       const [hit] = map.queryRenderedFeatures(e.point, { layers: [getBuildingsLayerId()] })
-      if (hit && hit.state?.unlocked && onSelectLocation) {
-        const building = buildingsByIdRef.current.get(hit.id)
-        if (building) {
-          onSelectLocation({
-            id: `osm:${hit.id}`,
-            name: building.properties.name,
-            lat: building.properties.centroid.lat,
-            lng: building.properties.centroid.lng,
-          })
-          return
-        }
+      const building = hit && buildingsByIdRef.current.get(hit.id)
+      if (building && onSelectLocation) {
+        onSelectLocation({
+          id: `osm:${hit.id}`,
+          name: building.properties.name,
+          lat: building.properties.centroid.lat,
+          lng: building.properties.centroid.lng,
+        })
+        return
       }
-      setDebugPreset({ name: 'Custom location', lat: e.lngLat.lat, lng: e.lngLat.lng })
+      onSetDebugPosition({ name: 'Custom location', lat: e.lngLat.lat, lng: e.lngLat.lng })
     }
     map.on('click', onClick)
     return () => map.off('click', onClick)
-  }, [map, onSelectLocation])
+  }, [map, onSelectLocation, onSetDebugPosition])
 
   return (
     <div style={{ position: 'relative', height: '460px', width: '100%' }}>
@@ -185,7 +318,7 @@ export function MapView({ userId, onSelectLocation }) {
       <TeleportControls
         active={debugPreset}
         onTeleport={handleTeleport}
-        onUseRealGps={() => setDebugPreset(null)}
+        onUseRealGps={() => onSetDebugPosition(null)}
         onSimulateExplored={handleSimulateExplored}
       />
       {geoError && !debugPreset && (

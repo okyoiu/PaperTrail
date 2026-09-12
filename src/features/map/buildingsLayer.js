@@ -56,6 +56,8 @@ function ringCentroid(geometry) {
   return { lat: sum.lat / ring.length, lng: sum.lng / ring.length }
 }
 
+export const UNNAMED_BUILDING = 'Unnamed building'
+
 // Fetches the whole pre-baked building set once. Static data, so there's no
 // per-move refetching the way a live Overpass query would need.
 export async function fetchAllBuildings() {
@@ -68,7 +70,7 @@ export async function fetchAllBuildings() {
     id: index, // stable as long as the file's feature order doesn't change
     properties: {
       ...feature.properties,
-      name: feature.properties?.name ?? 'Unnamed building',
+      name: feature.properties?.name ?? UNNAMED_BUILDING,
       centroid: ringCentroid(feature.geometry),
       render_height: estimateHeight(feature.properties),
     },

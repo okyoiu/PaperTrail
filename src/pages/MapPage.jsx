@@ -1,49 +1,91 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
-import { useFriendsMap } from '../hooks/useFriendsMap'
-import { useVisitTracker } from '../hooks/useVisitTracker'
-import { isSupabaseConfigured } from '../services/supabaseClient'
-import { FriendsMap } from '../features/map/FriendsMap'
-import { MapView } from '../features/map/MapView'
+import { getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
-import { levelForXp } from '../features/game/xp'
+import { levelForXp, XP_PER_REVIEW } from '../features/game/xp'
+import { MapView } from '../features/map/MapView'
+import { useAuth } from '../hooks/useAuth'
+import { useDebugPosition } from '../hooks/useDebugPosition'
+import { useFriendsMap } from '../hooks/useFriendsMap'
+import { useVisitTracker } from '../hooks/useVisitTracker'
+import { resolvePlace } from '../services/googlePlaces'
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString()
 }
 
-function FriendsMapSection() {
-  const { user } = useAuth()
-  const { myPosition, locations } = useFriendsMap(user?.id)
+export function MapPage() {
+  const { user, profile, setProfile } = useAuth()
+  const userId = user?.id
+  const { visits, placeError, clearVisits, markVisitReviewed } = useVisitTracker()
+  const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
+  const { friends } = useFriendsMap(userId, position)
+  const [reviews, setReviews] = useState([])
+  const [selectedLocation, setSelectedLocation] = useState(null)
+  const [reviewingLocation, setReviewingLocation] = useState(null)
+  const [reviewingVisitId, setReviewingVisitId] = useState(null)
 
-  if (!isSupabaseConfigured) return null
+  useEffect(() => {
+    if (!userId) return
+    getMyReviews(userId)
+      .then(setReviews)
+      .catch((err) => console.error('Failed to load reviews:', err))
+  }, [userId])
 
-  if (!user) {
-    return (
-      <section className="friends-map">
-        <h2>Friends map</h2>
-        <p>
-          <Link to="/login">Sign in</Link> to see your location and share it with friends.
-        </p>
-      </section>
+  function openBuildingReview(location) {
+    setReviewingVisitId(null)
+    setReviewingLocation(location)
+  }
+
+  // From tapping your own dot. Spots with no named building nearby get a
+  // Google place name when there is one.
+  async function openReviewHere(place) {
+    setSelectedLocation(null)
+    setReviewingVisitId(null)
+    if (place.name) {
+      setReviewingLocation(place)
+      return
+    }
+    const googlePlace = await resolvePlace(place.lat, place.lng).catch(() => null)
+    setReviewingLocation(
+      googlePlace?.name
+        ? { id: googlePlace.placeId, name: googlePlace.name, lat: place.lat, lng: place.lng }
+        : { ...place, name: `Pinned spot (${place.lat.toFixed(4)}, ${place.lng.toFixed(4)})` },
     )
   }
 
-  return (
-    <section className="friends-map">
-      <h2>Friends map</h2>
-      <FriendsMap userId={user.id} myPosition={myPosition} locations={locations} />
-    </section>
-  )
-}
+  // "Check in" on any past visit (Google-resolved place, not just a Rice
+  // campus OSM building) - this is what makes check-ins/XP work in any city,
+  // not only where the pre-baked buildings.geojson has data.
+  function openVisitCheckIn(visit) {
+    setReviewingVisitId(visit.id)
+    setReviewingLocation({
+      id: visit.placeId,
+      name: visit.name ?? visit.address ?? 'Unknown place',
+      lat: visit.lat,
+      lng: visit.lng,
+    })
+  }
 
-export function MapPage() {
-  const { user, profile } = useAuth()
-  const { position, visits, geoError, placeError, clearVisits } = useVisitTracker()
-  const [selectedLocation, setSelectedLocation] = useState(null)
-  const [reviewingLocation, setReviewingLocation] = useState(null)
+  function closeReview() {
+    setReviewingLocation(null)
+    setReviewingVisitId(null)
+  }
+
+  function handleReviewDone(result) {
+    setProfile(result.profile)
+    setReviews((prev) => [result.review, ...prev])
+    if (reviewingVisitId) {
+      markVisitReviewed(reviewingVisitId, {
+        rating: result.review.rating,
+        body: result.review.body,
+        photoUrl: result.review.photo_url,
+      })
+    }
+    setSelectedLocation(null)
+    closeReview()
+  }
 
   return (
     <div className="page">
@@ -54,12 +96,13 @@ export function MapPage() {
       )}
 
       <section className="status">
-        {geoError && <p className="error">Location error: {geoError}</p>}
+        {geoError && !debugPreset && <p className="error">Location error: {geoError}</p>}
         {placeError && <p className="error">Place lookup error: {placeError}</p>}
         {position ? (
           <p>
-            Current location: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}{' '}
-            (±{Math.round(position.accuracy)}m)
+            {debugPreset ? 'Debug location' : 'Current location'}: {position.lat.toFixed(5)},{' '}
+            {position.lng.toFixed(5)}
+            {position.accuracy != null && ` (±${Math.round(position.accuracy)}m)`}
           </p>
         ) : (
           <p>Waiting for location permission...</p>
@@ -67,21 +110,30 @@ export function MapPage() {
       </section>
 
       <section className="explore">
-        <h2>Explore (fog of war)</h2>
-        <p>
-          Walk toward a building and it reveals in 3D; click an unlocked one to leave a review
-          and earn XP.
-          {!user && (
-            <>
-              {' '}
-              <Link to="/login">Sign in</Link> to save your progress and review places.
-            </>
-          )}
-        </p>
-        <MapView userId={user?.id} onSelectLocation={user ? setSelectedLocation : undefined} />
+        <h2>Map</h2>
+        {user ? (
+          <p>
+            Walk toward buildings to reveal them. Tap a building or your orange dot to leave a
+            review with a photo and earn +{XP_PER_REVIEW} XP. Green dots are friends; 📖 marks
+            places you've reviewed.
+          </p>
+        ) : (
+          <p>
+            <Link to="/login">Sign in</Link> to see friends on the map, leave reviews, and earn XP.
+          </p>
+        )}
+        <MapView
+          userId={userId}
+          position={position}
+          debugPreset={debugPreset}
+          onSetDebugPosition={setDebugPosition}
+          geoError={geoError}
+          friends={friends}
+          reviews={reviews}
+          onSelectLocation={user ? setSelectedLocation : undefined}
+          onReviewHere={user ? openReviewHere : undefined}
+        />
       </section>
-
-      <FriendsMapSection />
 
       <section className="visits">
         <div className="visits-header">
@@ -102,6 +154,20 @@ export function MapPage() {
                 {visit.name && visit.address && (
                   <span className="address">{visit.address}</span>
                 )}
+
+                {visit.rating ? (
+                  <div className="visit-checkin">
+                    <span>{'★'.repeat(visit.rating)}{'☆'.repeat(5 - visit.rating)}</span>
+                    {visit.reviewBody && <p>{visit.reviewBody}</p>}
+                    {visit.photoUrl && <img src={visit.photoUrl} alt="" />}
+                  </div>
+                ) : (
+                  user && (
+                    <button type="button" onClick={() => openVisitCheckIn(visit)}>
+                      Check in
+                    </button>
+                  )
+                )}
               </li>
             ))}
           </ul>
@@ -110,19 +176,16 @@ export function MapPage() {
 
       {reviewingLocation ? (
         <ReviewForm
-          userId={user?.id}
+          userId={userId}
           location={reviewingLocation}
-          onCancel={() => setReviewingLocation(null)}
-          onDone={() => {
-            setReviewingLocation(null)
-            setSelectedLocation(null)
-          }}
+          onCancel={closeReview}
+          onDone={handleReviewDone}
         />
       ) : (
         selectedLocation && (
           <LocationCard
             location={selectedLocation}
-            onReview={setReviewingLocation}
+            onReview={openBuildingReview}
             onClose={() => setSelectedLocation(null)}
           />
         )

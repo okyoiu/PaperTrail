@@ -6,7 +6,7 @@ import {
   sendFriendRequest,
 } from '../backend/api'
 
-// Add/accept friends. A friend only shows up on FriendsMap once they're in
+// Add/accept friends. A friend only shows up on the map once they're in
 // the "friends" list below (i.e. an accepted friend_requests row exists).
 export function FriendsPanel({ userId }) {
   const [username, setUsername] = useState('')

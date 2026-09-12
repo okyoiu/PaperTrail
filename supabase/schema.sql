@@ -31,11 +31,16 @@ create table if not exists reviews (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) not null,
   location_id uuid references locations(id) not null,
+  rating integer check (rating between 1 and 5),
   body text,
   photo_url text,
   xp_awarded integer not null default 25,
   created_at timestamptz not null default now()
 );
+
+-- Re-running this file against a database created before the rating column
+-- existed still adds it, without touching any other data.
+alter table reviews add column if not exists rating integer check (rating between 1 and 5);
 
 -- Atomic XP increment so concurrent review submissions can't race each other.
 create or replace function increment_xp(p_user_id uuid, p_amount integer)
@@ -50,8 +55,25 @@ $$ language plpgsql;
 
 -- Row Level Security: readable by everyone, writable only by the owning user.
 alter table profiles enable row level security;
+alter table locations enable row level security;
 alter table reviews enable row level security;
 alter table unlocks enable row level security;
+
+-- locations has no "owner" - it's a shared row any signed-in user can create
+-- (upsertLocation, on first visit/review/photo of a place) or update (e.g.
+-- attaching a photo_url later), so policies are keyed on auth state, not
+-- auth.uid() matching a column. Missing this was a real bug: without it,
+-- every insert/update on locations was silently rejected by RLS.
+drop policy if exists "locations are viewable by everyone" on locations;
+create policy "locations are viewable by everyone" on locations for select using (true);
+
+drop policy if exists "authenticated users can create locations" on locations;
+create policy "authenticated users can create locations" on locations
+  for insert to authenticated with check (true);
+
+drop policy if exists "authenticated users can update locations" on locations;
+create policy "authenticated users can update locations" on locations
+  for update to authenticated using (true);
 
 drop policy if exists "profiles are viewable by everyone" on profiles;
 create policy "profiles are viewable by everyone" on profiles for select using (true);
@@ -154,4 +176,14 @@ create policy "users can update their own location" on live_locations
 
 -- Lets the frontend subscribe to live_locations changes over Realtime instead
 -- of polling; RLS above still applies to what each connected client receives.
-alter publication supabase_realtime add table live_locations;
+-- Guarded because adding an already-published table is an error, which
+-- would abort a re-run of this whole file.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'live_locations'
+  ) then
+    alter publication supabase_realtime add table live_locations;
+  end if;
+end $$;

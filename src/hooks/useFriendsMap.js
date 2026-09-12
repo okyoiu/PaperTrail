@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { useGeolocation } from './useGeolocation'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getVisibleLocations,
   subscribeToVisibleLocations,
@@ -8,11 +7,11 @@ import {
 
 const PUSH_INTERVAL_MS = 10000 // how often we report our own position
 
-// Combines: pushing the signed-in user's own GPS position to live_locations,
-// and reading back everyone currently visible to them (self + accepted
-// friends only — enforced by RLS, not by this hook). See supabase/schema.sql.
-export function useFriendsMap(userId) {
-  const { position, error: geoError } = useGeolocation()
+// Combines: pushing the signed-in user's position (real GPS or a debug
+// teleport, see useDebugPosition) to live_locations, and reading back the
+// accepted friends visible to them — enforced by RLS, not by this hook.
+// See supabase/schema.sql.
+export function useFriendsMap(userId, position) {
   const [locations, setLocations] = useState([])
   const lastPushRef = useRef(0)
 
@@ -32,5 +31,8 @@ export function useFriendsMap(userId) {
     updateMyLocation(userId, position.lat, position.lng).catch(() => {})
   }, [userId, position])
 
-  return { myPosition: position, geoError, locations }
+  // The user's own row is excluded: the map already draws their live dot.
+  const friends = useMemo(() => locations.filter((loc) => loc.user_id !== userId), [locations, userId])
+
+  return { friends }
 }
