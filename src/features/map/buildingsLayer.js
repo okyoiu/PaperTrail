@@ -11,7 +11,12 @@ export function addBuildingsLayer(map) {
     type: 'fill-extrusion',
     paint: {
       'fill-extrusion-color': '#7c8ff0',
-      'fill-extrusion-height': ['coalesce', ['get', 'height'], 8],
+      'fill-extrusion-height': [
+        'case',
+        ['has', 'height'], ['to-number', ['get', 'height']],
+        ['has', 'building:levels'], ['*', ['to-number', ['get', 'building:levels']], 3],
+        8,
+      ],
       'fill-extrusion-opacity': 0.85,
     },
   })
