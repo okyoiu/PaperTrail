@@ -6,6 +6,13 @@ function isIos() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
 }
 
+// This is a mobile-only feature - desktop Chrome/Edge also fire
+// beforeinstallprompt and would happily "install" the site as a standalone
+// desktop app window, which is confusing rather than useful here.
+function isMobileDevice() {
+  return /iphone|ipad|ipod|android/i.test(window.navigator.userAgent)
+}
+
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
 }
@@ -15,6 +22,8 @@ export default function InstallPrompt() {
   const [showIosHint, setShowIosHint] = useState(false)
 
   useEffect(() => {
+    if (!isMobileDevice()) return
+
     function handler(event) {
       event.preventDefault()
       setDeferredPrompt(event)
@@ -27,6 +36,8 @@ export default function InstallPrompt() {
 
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
+
+  if (!isMobileDevice()) return null
 
   if (deferredPrompt) {
     return (
