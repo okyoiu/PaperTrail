@@ -10,7 +10,7 @@ import { levelForXp } from './features/game/xp'
 // features/map, features/mobile, and features/game+backend instead of here.
 export default function App() {
   const [map, setMap] = useState(null)
-  const { position } = useGeolocation()
+  const { position, error: geoError } = useGeolocation()
   const [xp] = useState(0) // TODO(backend): replace with profile.xp from getProfile(userId)
   const [unlockedLocations] = useState([]) // TODO(backend): replace with getUnlockedLocations(userId)
   const [selectedLocation, setSelectedLocation] = useState(null)
@@ -26,6 +26,13 @@ export default function App() {
         </div>
         <InstallPrompt />
       </header>
+
+      {/* TEMP(mobile): remove once fog-of-war visibly reflects position instead */}
+      <div className="geo-debug">
+        {geoError && `Geolocation error: ${geoError.message}`}
+        {!geoError && !position && 'Waiting for GPS fix…'}
+        {!geoError && position && `lat ${position.lat.toFixed(5)}, lng ${position.lng.toFixed(5)}`}
+      </div>
 
       {selectedLocation && (
         <LocationCard

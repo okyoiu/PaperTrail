@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // Mobile role: add real icons to public/icons/ then list them under manifest.icons below.
 export default defineConfig({
+  server: {
+    // Dev-only: lets tunnel tools (cloudflared/ngrok) reach the dev server.
+    // Their hostname is random per run, so we allow all rather than hardcode one.
+    allowedHosts: true,
+  },
   plugins: [
     react(),
     VitePWA({

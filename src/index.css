@@ -41,6 +41,19 @@ body,
   z-index: 10;
 }
 
+.geo-debug {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0) + 56px);
+  left: 16px;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
 .xp-badge {
   background: rgba(15, 23, 42, 0.85);
   color: #fff;
