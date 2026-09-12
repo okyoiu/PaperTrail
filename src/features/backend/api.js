@@ -8,6 +8,13 @@ export async function fetchNearbyPlaces(lat, lng) {
   return res.json()
 }
 
+export async function ensureProfile(userId) {
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true })
+  if (error) throw error
+}
+
 export async function getProfile(userId) {
   const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
   if (error) throw error
