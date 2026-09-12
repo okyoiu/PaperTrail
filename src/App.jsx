@@ -15,10 +15,12 @@ import { ensureProfile, getProfile, getUnlockedLocations } from './features/back
 export default function App() {
   const session = useSession()
   const [map, setMap] = useState(null)
-  const { position } = useGeolocation()
+  const { position, error: geoError } = useGeolocation()
   const [profile, setProfile] = useState(null)
   const [unlockedLocations, setUnlockedLocations] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
+
+  const gpsStatus = geoError ? 'error' : position ? 'ok' : 'waiting'
 
   useEffect(() => {
     if (!session) return
@@ -40,6 +42,7 @@ export default function App() {
 
       <header className="hud">
         <div className="xp-badge">
+          <span className={`gps-dot gps-dot--${gpsStatus}`} aria-hidden="true" />
           Lv. {levelForXp(xp)} · {xp} XP
         </div>
         <div className="hud-actions">
