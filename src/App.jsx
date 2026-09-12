@@ -4,6 +4,7 @@ import FogOfWar from './features/map/FogOfWar'
 import InstallPrompt from './features/mobile/InstallPrompt'
 import { useGeolocation } from './features/mobile/useGeolocation'
 import LocationCard from './features/game/LocationCard'
+import ReviewForm from './features/game/ReviewForm'
 import { levelForXp } from './features/game/xp'
 import { useSession } from './features/auth/useSession'
 import SignIn from './features/auth/SignIn'
@@ -19,15 +20,22 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [unlockedLocations, setUnlockedLocations] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
+  const [reviewingLocation, setReviewingLocation] = useState(null)
 
   const gpsStatus = geoError ? 'error' : position ? 'ok' : 'waiting'
 
+  async function refreshProgress() {
+    const [freshProfile, freshUnlocked] = await Promise.all([
+      getProfile(session.user.id),
+      getUnlockedLocations(session.user.id),
+    ])
+    setProfile(freshProfile)
+    setUnlockedLocations(freshUnlocked)
+  }
+
   useEffect(() => {
     if (!session) return
-    ensureProfile(session.user.id)
-      .then(() => getProfile(session.user.id))
-      .then(setProfile)
-    getUnlockedLocations(session.user.id).then(setUnlockedLocations)
+    ensureProfile(session.user.id).then(refreshProgress)
   }, [session])
 
   if (session === undefined) return null
@@ -53,13 +61,19 @@ export default function App() {
         </div>
       </header>
 
-      {selectedLocation && (
-        <LocationCard
-          location={selectedLocation}
-          onReview={() => {
-            // TODO(backend): open a review form and call submitReview()
+      {reviewingLocation ? (
+        <ReviewForm
+          userId={session.user.id}
+          location={reviewingLocation}
+          onCancel={() => setReviewingLocation(null)}
+          onDone={async () => {
+            await refreshProgress()
+            setReviewingLocation(null)
+            setSelectedLocation(null)
           }}
         />
+      ) : (
+        selectedLocation && <LocationCard location={selectedLocation} onReview={setReviewingLocation} />
       )}
     </div>
   )
