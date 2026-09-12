@@ -10,10 +10,12 @@ import { levelForXp } from './features/game/xp'
 // features/map, features/mobile, and features/game+backend instead of here.
 export default function App() {
   const [map, setMap] = useState(null)
-  const { position } = useGeolocation()
+  const { position, error: geoError } = useGeolocation()
   const [xp] = useState(0) // TODO(backend): replace with profile.xp from getProfile(userId)
   const [unlockedLocations] = useState([]) // TODO(backend): replace with getUnlockedLocations(userId)
   const [selectedLocation, setSelectedLocation] = useState(null)
+
+  const gpsStatus = geoError ? 'error' : position ? 'ok' : 'waiting'
 
   return (
     <div className="app-shell">
@@ -22,6 +24,7 @@ export default function App() {
 
       <header className="hud">
         <div className="xp-badge">
+          <span className={`gps-dot gps-dot--${gpsStatus}`} aria-hidden="true" />
           Lv. {levelForXp(xp)} · {xp} XP
         </div>
         <InstallPrompt />
