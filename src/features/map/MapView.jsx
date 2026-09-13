@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { distanceMeters } from '../../utils/geo'
-import { getUnlockedLocations, unlockLocation } from '../backend/api'
+import { displayName, getUnlockedLocations, unlockLocation } from '../backend/api'
 import {
   addBuildingsLayer,
   DEFAULT_CENTER,
@@ -63,13 +63,15 @@ function createElement(tag, className, text) {
 }
 
 // Built with textContent rather than innerHTML because review text is user input.
-// With onOpenReview, each review opens as a receipt: tap its photo, or "View
-// receipt" when it has none.
-function reviewPopupContent(name, reviews, onOpenReview) {
+// entries: { review, author } - author is the friend's profile on a friend's
+// review, null on the player's own. With onOpenReview, each review opens as a
+// receipt: tap its photo, or "View receipt" when it has none.
+function reviewPopupContent(name, entries, onOpenReview) {
   const root = createElement('div', 'review-popup')
   root.append(createElement('strong', null, name))
-  for (const review of reviews) {
+  for (const { review, author } of entries) {
     const item = createElement('div', 'review-popup-item')
+    if (author) item.append(createElement('div', 'review-popup-author', displayName(author)))
     if (review.rating) {
       item.append(
         createElement('div', 'review-popup-stars', '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating)),
@@ -77,7 +79,19 @@ function reviewPopupContent(name, reviews, onOpenReview) {
     }
     if (review.body) item.append(createElement('p', null, review.body))
     const openReceipt = () =>
-      onOpenReview({ id: review.id, title: name, rating: review.rating, body: review.body, photoUrl: review.photo_url })
+      onOpenReview({
+        id: review.id,
+        title: name,
+        rating: review.rating,
+        body: review.body,
+        photoUrl: review.photo_url,
+        ...(author && {
+          author: displayName(author),
+          characterId: author.character_id,
+          date: review.created_at,
+          isFriend: true,
+        }),
+      })
     if (review.photo_url) {
       const img = createElement('img')
       img.src = review.photo_url
@@ -93,7 +107,7 @@ function reviewPopupContent(name, reviews, onOpenReview) {
         item.append(img)
       }
     } else if (onOpenReview) {
-      // No photo to tap, so a link opens the receipt (where it can be deleted).
+      // No photo to tap, so a link opens the receipt (where your own can be deleted).
       const receiptButton = createElement('button', 'review-popup-receipt', 'View receipt')
       receiptButton.type = 'button'
       receiptButton.addEventListener('click', openReceipt)
@@ -108,9 +122,10 @@ function reviewPopupContent(name, reviews, onOpenReview) {
 // player has walked up to or reviewed them - see buildingsLayer.js), the
 // player's character (tap it to review where you're standing) with a camera
 // that follows it, other players' characters (see hooks/usePlayersMap.js),
-// and a book icon on every place the player has reviewed (tapping a photo in
-// its popup calls onOpenReview). exploredPlaceIds are the google_place_ids
-// the player has reviewed; the `osm:` ones color their building.
+// and a book icon on every place the player or a friend has reviewed (tapping
+// a photo in its popup calls onOpenReview). friendReviews come from
+// getFriendReviews and only add book icons. exploredPlaceIds are the
+// google_place_ids the player has reviewed; the `osm:` ones color their building.
 export function MapView({
   userId,
   characterId,
@@ -120,6 +135,7 @@ export function MapView({
   geoError,
   players,
   reviews,
+  friendReviews = [],
   exploredPlaceIds,
   onSelectLocation,
   onReviewHere,
@@ -396,32 +412,39 @@ export function MapView({
     }
   }, [map])
 
-  // One book icon per reviewed place; its popup lists the reviews left there.
+  // One book icon per place you or a friend reviewed; its popup lists the
+  // reviews left there, yours first. Places only friends reviewed get the
+  // friend-colored icon.
   useEffect(() => {
     if (!map) return
     for (const marker of bookMarkersRef.current) marker.remove()
 
     const byLocation = new Map()
-    for (const review of reviews) {
-      const loc = review.locations
+    const entries = [
+      ...reviews.map((review) => ({ review, author: null })),
+      ...friendReviews.map((review) => ({ review, author: review.profiles ?? {} })),
+    ]
+    for (const entry of entries) {
+      const loc = entry.review.locations
       if (!loc) continue
-      if (!byLocation.has(loc.id)) byLocation.set(loc.id, { loc, reviews: [] })
-      byLocation.get(loc.id).reviews.push(review)
+      if (!byLocation.has(loc.id)) byLocation.set(loc.id, { loc, entries: [] })
+      byLocation.get(loc.id).entries.push(entry)
     }
 
-    bookMarkersRef.current = [...byLocation.values()].map(({ loc, reviews: reviewsHere }) => {
-      const element = createElement('div', 'map-marker-book', '📖')
-      element.title = `You reviewed ${loc.name}`
+    bookMarkersRef.current = [...byLocation.values()].map(({ loc, entries: entriesHere }) => {
+      const mine = entriesHere.some((entry) => !entry.author)
+      const element = createElement('div', mine ? 'map-marker-book' : 'map-marker-book map-marker-book--friend', '📖')
+      element.title = mine ? `You reviewed ${loc.name}` : `Friends reviewed ${loc.name}`
       return new Marker({ element, anchor: 'bottom' })
         .setLngLat([loc.lng, loc.lat])
         .setPopup(
           new Popup({ offset: 24, maxWidth: '240px' }).setDOMContent(
-            reviewPopupContent(loc.name, reviewsHere, onOpenReview),
+            reviewPopupContent(loc.name, entriesHere, onOpenReview),
           ),
         )
         .addTo(map)
     })
-  }, [map, reviews, onOpenReview])
+  }, [map, reviews, friendReviews, onOpenReview])
 
   // Add each move to the character's trail (see characterTrail.js) and reveal
   // buildings anywhere along it - a walk unlocks the ones it passes, not just

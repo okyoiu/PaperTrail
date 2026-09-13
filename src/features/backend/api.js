@@ -193,6 +193,22 @@ export async function getMyReviews(userId) {
   return data
 }
 
+// Reviews left by these players (the user's friends, see getFriends), newest
+// first, each with its place and who left it. Reviews are readable by
+// everyone under RLS, so this needs nothing extra in schema.sql.
+export async function getFriendReviews(friendIds) {
+  if (friendIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(
+      'id, rating, body, photo_url, created_at, locations(id, google_place_id, name, lat, lng), profiles(username, character_id)',
+    )
+    .in('user_id', friendIds)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
 // The Storage key of a review photo, from the public URL uploadReviewPhoto
 // handed back (.../storage/v1/object/public/review-photos/<key>).
 function reviewPhotoPath(photoUrl) {
@@ -213,10 +229,22 @@ export async function deleteReview(userId, reviewId) {
     .eq('user_id', userId)
     .select('xp_awarded, photo_url')
     .single()
-  // PGRST116 = no row came back: without the delete policy (schema.sql not
-  // re-run), RLS quietly deletes nothing.
+  // PGRST116 = no row came back. Either the review is already gone (e.g. a
+  // Visit history entry for one deleted on another device), or RLS quietly
+  // deleted nothing because the delete policy is missing (schema.sql not
+  // re-run) - only the second still has the row.
   if (error?.code === 'PGRST116') {
-    throw new Error("Couldn't delete this review - re-run supabase/schema.sql to allow deleting reviews.")
+    const { data: stillThere, error: lookupError } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('id', reviewId)
+      .maybeSingle()
+    if (lookupError) throw lookupError
+    if (stillThere) {
+      throw new Error("Couldn't delete this review - re-run supabase/schema.sql to allow deleting reviews.")
+    }
+    // Its XP and photo were already taken care of when it was deleted.
+    return getProfile(userId)
   }
   if (error) throw error
 

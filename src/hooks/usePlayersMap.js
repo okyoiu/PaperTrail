@@ -111,5 +111,5 @@ export function usePlayersMap(userId, position) {
       }))
   }, [locations, friendIds, userId])
 
-  return { players }
+  return { players, friendIds }
 }
