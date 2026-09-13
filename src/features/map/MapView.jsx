@@ -20,6 +20,7 @@ import { getCharacter } from './characters'
 import { recordPosition } from './characterTrail'
 import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
+import { applyGameStyle } from './gameStyle'
 import { createPlayerAvatar } from './playerAvatar'
 import { createRemotePlayerMarker } from './remotePlayerMarker'
 import { TeleportControls } from './TeleportControls'
@@ -157,6 +158,9 @@ export function MapView({
     // clicks) for many seconds on a slow connection or busy GPU.
     instance.once('style.load', async () => {
       addBuildingsLayer(instance)
+      // Recolor the basemap to the casual-game palette and surface places
+      // (restaurants, shops, sights) as badges. See features/map/gameStyle.js.
+      applyGameStyle(instance)
 
       // A failed fetch here must never prevent setMap() - every control and
       // marker depends on `map`, and would otherwise silently do nothing.
@@ -512,7 +516,7 @@ export function MapView({
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
-      {map && <FogOfWar map={map} position={position} revealRadiusMeters={UNLOCK_RADIUS_METERS * 2} />}
+      {map && <FogOfWar map={map} position={position} revealRadiusMeters={UNLOCK_RADIUS_METERS * 3} />}
       {debugOpen && (
         <TeleportControls
           active={debugPreset}

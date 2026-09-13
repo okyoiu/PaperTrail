@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 
-const FOG_COLOR = 'rgba(176, 196, 214, 0.55)'
+// A soft warm haze over unexplored ground - light enough that places and
+// roads still read through it (Life360 "see everything"), while the cleared
+// circle around the player stays crisp (Pokemon Go exploration).
+const FOG_COLOR = 'rgba(224, 231, 213, 0.38)'
 
 // A canvas "flashlight" overlay on top of the MapLibre canvas: everything is
 // fogged except a soft-edged circle around the player's real-world position,
@@ -44,7 +47,7 @@ export function FogOfWar({ map, position, revealRadiusMeters = 60 }) {
       const gradient = ctx.createRadialGradient(
         center.x,
         center.y,
-        radius * 0.5,
+        radius * 0.35,
         center.x,
         center.y,
         radius,

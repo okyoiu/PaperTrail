@@ -7,6 +7,7 @@ import ReviewViewer from '../features/game/ReviewViewer'
 import { XpBar } from '../features/game/XpBar'
 import { REVIEW_XP_AWARD } from '../features/game/xp'
 import { BUILDING_COLORS } from '../features/map/buildingsLayer'
+import { POI_LEGEND } from '../features/map/gameStyle'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
 import { CharacterQuickPick } from '../features/social/CharacterQuickPick'
@@ -190,6 +191,15 @@ export function MapPage() {
               {LEGEND.map((entry) => (
                 <li key={entry.label}>
                   <span className="building-legend-swatch" style={{ background: entry.color }} />
+                  {entry.label}
+                </li>
+              ))}
+            </ul>
+            <h3 className="legend-heading">Places around you</h3>
+            <ul className="building-legend" aria-label="Place categories">
+              {POI_LEGEND.map((entry) => (
+                <li key={entry.label}>
+                  <span className="poi-legend-dot" style={{ borderColor: entry.color }} />
                   {entry.label}
                 </li>
               ))}
