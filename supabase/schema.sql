@@ -46,6 +46,10 @@ create table if not exists reviews (
 -- existed still adds it, without touching any other data.
 alter table reviews add column if not exists rating integer check (rating between 1 and 5);
 
+-- The map character each player picked (see src/features/map/characters.js);
+-- null means the default one.
+alter table profiles add column if not exists character_id text;
+
 -- Atomic XP increment so concurrent review submissions can't race each other.
 create or replace function increment_xp(p_user_id uuid, p_amount integer)
 returns void as $$
@@ -191,3 +195,8 @@ begin
     alter publication supabase_realtime add table live_locations;
   end if;
 end $$;
+
+-- The API supabase-js talks to (PostgREST) caches each table's columns. Without
+-- this, a column added above (e.g. profiles.character_id) can keep failing with
+-- "Could not find the '...' column of '...' in the schema cache".
+notify pgrst, 'reload schema';

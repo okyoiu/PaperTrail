@@ -104,7 +104,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
         Simulate explored
       </button>
       <span style={{ color: '#8a9aa1', fontSize: 11 }}>
-        Click a building or your dot to review; click elsewhere to move your dot
+        Click a building or your character to review; click elsewhere to walk there
       </span>
     </div>
   )
