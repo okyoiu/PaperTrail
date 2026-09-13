@@ -1,11 +1,12 @@
 # RiceHack Quest
 
-Pokémon-Go-style location game. Players walk around, a Shadow-of-War-style fog
-lifts around real 3D buildings (rendered from OpenStreetMap data via
-osmium-tool) as they explore, and they earn XP for leaving reviews at real
-places (pulled from Google Places). A friends map (Life360-style) lets
-signed-in users see each other's live location once a friend request is
-accepted.
+Pokémon-Go-style location game. Players pick an explorer, walk around, and a
+Shadow-of-War-style fog lifts around real 3D buildings (rendered from
+OpenStreetMap data via osmium-tool) as they explore. Leaving a review at a
+place earns XP and paints that building in the "explored" color, saved to the
+database so it's there on every device. Signed-in players see each other's
+characters walking the map live; each player chooses on their Profile tab
+whether everyone or only accepted friends can see them.
 
 ## Stack
 
@@ -24,7 +25,7 @@ Each role owns a folder — work in parallel without stepping on each other's fi
 | **Frontend / Map** | `src/features/map/` | `MapView.jsx` (MapLibre setup), `buildingsLayer.js` (3D extrusion), `FogOfWar.jsx` (canvas fog), also owns generating `public/data/buildings.geojson` via osmium-tool |
 | **Backend / Data** | `src/features/backend/`, `src/features/game/`, `api/`, `supabase/` | `api.js` (Supabase calls), `xp.js` (leveling math), `places.js` (Google Places proxy), `schema.sql` (DB schema + RLS) |
 | **Mobile** | `src/features/mobile/` | `useGeolocation.js`, `CameraCapture.jsx`, `InstallPrompt.jsx`, PWA manifest in `vite.config.js`, on-device testing/polish |
-| **Social / App shell** | `src/pages/`, `src/components/`, `src/features/social/` | Login/Map/Add-friend pages + bottom nav, friend requests, friends live map |
+| **Social / App shell** | `src/pages/`, `src/components/`, `src/features/social/` | Character-select sign-in (`SignIn.jsx`, email code or magic link), Profile tab (`PlayerCard.jsx`, `LocationVisibility.jsx`), friend requests, other players on the map (`hooks/usePlayersMap.js`, `map/remotePlayerMarker.js`) |
 
 `src/App.jsx` is the shared wiring file — it renders the page router. Keep changes there small and coordinate before editing it, since it's the one place every role touches.
 
@@ -46,6 +47,15 @@ npx vercel --prod
 ```
 
 Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `GOOGLE_PLACES_API_KEY` as environment variables in the Vercel project settings (not just `.env` — that file isn't deployed). Once the GoDaddy domain is registered, add it under Vercel → Project → Domains and update DNS at GoDaddy per Vercel's instructions.
+
+## How the map state is stored
+
+- `unlocks` is one row per player per place: `unlocked_at` when their character first
+  walked up to it (fog lifts), `explored_at` when they first reviewed it (building turns
+  the explored color). A trigger on `reviews` sets `explored_at`, so the two can't drift.
+- `live_locations` is one row per player, overwritten every few seconds while the app is
+  open; players not heard from in 10 minutes drop off the map. Who can read which row is
+  decided by row-level security from `profiles.location_visibility`.
 
 ## Day-1 checklist
 

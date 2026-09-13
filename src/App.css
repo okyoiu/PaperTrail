@@ -112,6 +112,36 @@
   font-size: 0.85rem;
 }
 
+/* Building colors on the map (see features/map/buildingsLayer.js). */
+.building-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.building-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.building-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.explore-players {
+  margin-top: 0.5rem;
+  color: #52525b;
+  font-size: 0.85rem;
+}
+
 /* --- Immersive map: edge-to-edge under the notch / Dynamic Island ------- */
 
 .app-content--immersive {

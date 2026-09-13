@@ -8,16 +8,20 @@ import {
   DEFAULT_CENTER,
   fetchAllBuildings,
   getBuildingsLayerId,
+  osmIdFromPlaceId,
+  osmPlaceId,
   setAllBuildings,
+  setBuildingExplored,
   setBuildingUnlocked,
   UNNAMED_BUILDING,
 } from './buildingsLayer'
 import { CameraControls } from './CameraControls'
-import { characterSvg, getCharacter } from './characters'
+import { getCharacter } from './characters'
 import { recordPosition } from './characterTrail'
 import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
 import { createPlayerAvatar } from './playerAvatar'
+import { createRemotePlayerMarker } from './remotePlayerMarker'
 import { TeleportControls } from './TeleportControls'
 import { loadVisitedBuildingIds, saveVisitedBuilding } from './visitedBuildingsStore'
 
@@ -48,11 +52,6 @@ function linear(t) {
 
 function cameraOnPlayer(position, view) {
   return { center: [position.lng, position.lat], zoom: view.zoom, pitch: view.pitch }
-}
-
-function osmIdFromPlaceId(placeId) {
-  const match = /^osm:(\d+)$/.exec(placeId ?? '')
-  return match ? Number(match[1]) : null
 }
 
 function createElement(tag, className, text) {
@@ -97,23 +96,13 @@ function reviewPopupContent(name, reviews, onOpenReview) {
   return root
 }
 
-// A friend's character with their name above it. Only rebuilt when one of
-// those changes, since this runs whenever any friend moves.
-function renderFriendMarker(element, username, character) {
-  const key = `${character.id}:${username}`
-  if (element.dataset.key === key) return
-  element.dataset.key = key
-  element.style.setProperty('--avatar-accent', character.accent)
-  const figure = createElement('div')
-  figure.innerHTML = characterSvg(character) // static markup, see characters.js
-  // The name is user input, so it goes in as text.
-  element.replaceChildren(createElement('span', 'map-marker-friend-name', username), figure)
-}
-
-// The one map: MapLibre + 3D fog-of-war buildings, the player's character
-// (tap it to review where you're standing) with a camera that follows it,
-// accepted friends' characters, and a book icon on every place the player
-// has reviewed (tapping a photo in its popup calls onOpenReview).
+// The one map: MapLibre + 3D fog-of-war buildings (colored by whether the
+// player has walked up to or reviewed them - see buildingsLayer.js), the
+// player's character (tap it to review where you're standing) with a camera
+// that follows it, other players' characters (see hooks/usePlayersMap.js),
+// and a book icon on every place the player has reviewed (tapping a photo in
+// its popup calls onOpenReview). exploredPlaceIds are the google_place_ids
+// the player has reviewed; the `osm:` ones color their building.
 export function MapView({
   userId,
   characterId,
@@ -121,8 +110,9 @@ export function MapView({
   debugPreset,
   onSetDebugPosition,
   geoError,
-  friends,
+  players,
   reviews,
+  exploredPlaceIds,
   onSelectLocation,
   onReviewHere,
   onOpenReview,
@@ -131,10 +121,11 @@ export function MapView({
   const [map, setMap] = useState(null)
   const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
+  const exploredIdsRef = useRef(new Set())
   const [debugOpen, setDebugOpen] = useState(false) // debug menu starts hidden
   const debugToggleRef = useRef(null)
   const avatarRef = useRef(null)
-  const friendMarkersRef = useRef(new Map()) // user_id -> Marker
+  const playerMarkersRef = useRef(new Map()) // user id -> remote player marker
   const bookMarkersRef = useRef([])
 
   // Camera. While `following`, it stays centered on the player at viewRef's
@@ -192,20 +183,40 @@ export function MapView({
     debugToggleRef.current?.setActive(debugOpen)
   }, [map, debugOpen])
 
-  // Buildings this user unlocked in earlier sessions or on other devices.
+  // Buildings this user unlocked (and reviewed) in earlier sessions or on
+  // other devices - unlocks.explored_at is kept in sync from reviews by the
+  // database, see supabase/schema.sql.
   useEffect(() => {
     if (!map || !userId) return
     getUnlockedLocations(userId)
       .then((remote) => {
-        for (const { locations: loc } of remote) {
+        for (const { explored_at: exploredAt, locations: loc } of remote) {
           const id = osmIdFromPlaceId(loc?.google_place_id)
           if (id === null || !buildingsByIdRef.current.has(id)) continue
           unlockedIdsRef.current.add(id)
-          setBuildingUnlocked(map, id, true)
+          if (exploredAt) {
+            exploredIdsRef.current.add(id)
+            setBuildingExplored(map, id, true)
+          } else {
+            setBuildingUnlocked(map, id, true)
+          }
         }
       })
       .catch((err) => console.error('Failed to load saved visits from Supabase:', err))
   }, [map, userId])
+
+  // Paint a building in the explored color as soon as it's reviewed (the
+  // list comes from the player's reviews, so this also covers cold loads).
+  useEffect(() => {
+    if (!map) return
+    for (const placeId of exploredPlaceIds) {
+      const id = osmIdFromPlaceId(placeId)
+      if (id === null || exploredIdsRef.current.has(id) || !buildingsByIdRef.current.has(id)) continue
+      exploredIdsRef.current.add(id)
+      unlockedIdsRef.current.add(id)
+      setBuildingExplored(map, id, true)
+    }
+  }, [map, exploredPlaceIds])
 
   // The player's character. It isn't drawn until the first position arrives.
   useEffect(() => {
@@ -304,7 +315,7 @@ export function MapView({
       onReviewHere(
         nearest
           ? {
-              id: `osm:${nearest.id}`,
+              id: osmPlaceId(nearest.id),
               name: nearest.properties.name,
               lat: nearest.properties.centroid.lat,
               lng: nearest.properties.centroid.lng,
@@ -328,27 +339,23 @@ export function MapView({
     }
   }, [map, position, onReviewHere])
 
-  // Friends' characters, kept in sync with live_locations.
+  // Other players' characters, kept in sync with live_locations. Each one
+  // walks to its new position (see remotePlayerMarker.js); players who drop
+  // off the list (left the map, went friends-only) are removed.
   useEffect(() => {
     if (!map) return
-    const markers = friendMarkersRef.current
+    const markers = playerMarkersRef.current
     const visibleIds = new Set()
 
-    for (const friend of friends) {
-      visibleIds.add(friend.user_id)
-      const username = friend.profiles?.username ?? 'Friend'
-      let marker = markers.get(friend.user_id)
+    for (const player of players) {
+      visibleIds.add(player.userId)
+      let marker = markers.get(player.userId)
       if (!marker) {
-        marker = new Marker({ element: createElement('div', 'map-marker-friend'), anchor: 'bottom' })
-          .setLngLat([friend.lng, friend.lat])
-          .setPopup(new Popup({ offset: 68, closeButton: false }))
-          .addTo(map)
-        markers.set(friend.user_id, marker)
-      } else {
-        marker.setLngLat([friend.lng, friend.lat])
+        marker = createRemotePlayerMarker(map)
+        markers.set(player.userId, marker)
       }
-      renderFriendMarker(marker.getElement(), username, getCharacter(friend.profiles?.character_id))
-      marker.getPopup().setText(`${username} · updated ${new Date(friend.updated_at).toLocaleTimeString()}`)
+      marker.setPlayer(player)
+      marker.moveTo(player)
     }
 
     for (const [id, marker] of markers) {
@@ -356,7 +363,16 @@ export function MapView({
       marker.remove()
       markers.delete(id)
     }
-  }, [map, friends])
+  }, [map, players])
+
+  // Everything else is torn down with the map, but these hold animation frames.
+  useEffect(() => {
+    const markers = playerMarkersRef.current
+    return () => {
+      for (const marker of markers.values()) marker.remove()
+      markers.clear()
+    }
+  }, [map])
 
   // One book icon per reviewed place; its popup lists the reviews left there.
   useEffect(() => {
@@ -408,7 +424,7 @@ export function MapView({
 
       if (userId) {
         unlockLocation(userId, {
-          placeId: `osm:${id}`,
+          placeId: osmPlaceId(id),
           name: building.properties.name,
           lat: building.properties.centroid.lat,
           lng: building.properties.centroid.lng,
@@ -451,12 +467,12 @@ export function MapView({
     startFollowing()
   }
 
-  // Preview-only: lights up every building already loaded nearby so you can
-  // see what a fully-explored area looks like without walking to each one.
+  // Preview-only: lifts the fog from every loaded building so you can see
+  // what a fully-walked area looks like without walking to each one.
   // Deliberately doesn't touch unlockedIdsRef or call saveVisitedBuilding/
   // unlockLocation - so nothing here gets persisted (a refresh reverts it),
   // and a real visit to one of these buildings later still saves normally.
-  function handleSimulateExplored() {
+  function handleRevealAll() {
     if (!map) return
     for (const id of buildingsByIdRef.current.keys()) {
       setBuildingUnlocked(map, id, true)
@@ -477,9 +493,10 @@ export function MapView({
       if (building && onSelectLocation) {
         onSelectLocation({
           // Unlocked = the character has walked here, which is what lets the
-          // player review it ("Simulate explored" only lights buildings up).
+          // player review it ("Reveal all buildings" only lights them up).
           visited: unlockedIdsRef.current.has(hit.id),
-          id: `osm:${hit.id}`,
+          explored: exploredIdsRef.current.has(hit.id),
+          id: osmPlaceId(hit.id),
           name: building.properties.name,
           lat: building.properties.centroid.lat,
           lng: building.properties.centroid.lng,
@@ -501,7 +518,7 @@ export function MapView({
           active={debugPreset}
           onTeleport={handleTeleport}
           onUseRealGps={handleUseRealGps}
-          onSimulateExplored={handleSimulateExplored}
+          onRevealAll={handleRevealAll}
           onClose={() => setDebugOpen(false)}
         />
       )}

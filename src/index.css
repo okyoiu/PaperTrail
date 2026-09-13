@@ -263,7 +263,7 @@ code {
 }
 
 .player-avatar,
-.map-marker-friend,
+.map-marker-player,
 .map-marker-book {
   z-index: 2;
 }
@@ -285,7 +285,8 @@ code {
   transform-origin: 50% 100%;
 }
 
-.player-avatar.is-facing-left .player-avatar-figure {
+.player-avatar.is-facing-left .player-avatar-figure,
+.map-marker-player.is-facing-left .player-avatar-figure {
   transform: scaleX(-1);
 }
 
@@ -306,17 +307,22 @@ code {
   transform-origin: 50% 0;
 }
 
-.player-avatar.is-walking .avatar-body {
+.player-avatar.is-walking .avatar-body,
+.map-marker-player.is-walking .avatar-body {
   animation: avatar-bounce 0.4s ease-in-out infinite;
 }
 
 .player-avatar.is-walking .avatar-leg-front,
-.player-avatar.is-walking .avatar-arm-back {
+.player-avatar.is-walking .avatar-arm-back,
+.map-marker-player.is-walking .avatar-leg-front,
+.map-marker-player.is-walking .avatar-arm-back {
   animation: avatar-swing 0.8s ease-in-out infinite;
 }
 
 .player-avatar.is-walking .avatar-leg-back,
-.player-avatar.is-walking .avatar-arm-front {
+.player-avatar.is-walking .avatar-arm-front,
+.map-marker-player.is-walking .avatar-leg-back,
+.map-marker-player.is-walking .avatar-arm-front {
   animation: avatar-swing 0.8s ease-in-out -0.4s infinite;
 }
 
@@ -402,6 +408,7 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   .player-avatar *,
+  .map-marker-player *,
   .player-ring::after {
     animation: none !important;
   }
@@ -436,15 +443,21 @@ code {
   background: rgba(16, 27, 33, 0.95);
 }
 
-/* A friend's character, standing still, with their name above it. */
-.map-marker-friend {
+/* Another player's character with their name above it (see
+   features/map/remotePlayerMarker.js). Friends get their character's accent
+   around the name and a star; everyone else a neutral tag. */
+.map-marker-player {
   display: flex;
   flex-direction: column;
   align-items: center;
   cursor: pointer;
 }
 
-.map-marker-friend svg {
+.map-marker-player .player-avatar-figure {
+  transform-origin: 50% 100%;
+}
+
+.map-marker-player svg {
   display: block;
   width: 30px;
   height: 44px;
@@ -452,18 +465,27 @@ code {
   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
 }
 
-.map-marker-friend-name {
+.map-marker-player-name {
   max-width: 96px;
   margin-bottom: 2px;
   padding: 0 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 2px solid var(--avatar-accent, #16a34a);
+  border: 2px solid rgba(255, 255, 255, 0.6);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.85);
   color: #fff;
   font: 600 11px/16px system-ui, sans-serif;
+}
+
+.map-marker-player.is-friend .map-marker-player-name {
+  border-color: var(--avatar-accent, #16a34a);
+}
+
+.map-marker-player.is-friend .map-marker-player-name::before {
+  content: '★ ';
+  color: var(--avatar-accent, #16a34a);
 }
 
 .map-marker-book {
@@ -676,4 +698,181 @@ code {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* --- Sign-in + Profile tab (see social/SignIn.jsx, PlayerCard.jsx) ------- */
+
+.sign-in,
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 1rem 0;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #0f172a;
+  text-align: left;
+}
+
+.sign-in label,
+.profile-section h3 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sign-in input {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 400;
+}
+
+.sign-in input[inputmode='numeric'] {
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+/* The chosen explorer, big, like a character-select screen. */
+.sign-in-hero,
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--avatar-accent, #e8a33d) 16%, #fff);
+  border: 2px solid var(--avatar-accent, #e8a33d);
+  color: #0f172a;
+  text-align: left;
+}
+
+.sign-in-hero h2,
+.player-card h2 {
+  margin: 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+  /* These cards keep a fixed light background in either theme, so the heading
+     must stay dark - otherwise the global h2 color flips to near-white on it. */
+  color: #0f172a;
+}
+
+.sign-in-hero .character-figure svg,
+.player-card .character-figure svg {
+  width: 56px;
+  height: 82px;
+}
+
+.sign-in-hero-label,
+.player-card-meta {
+  font-size: 13px;
+  color: #475569;
+}
+
+.player-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-card-email {
+  font-size: 12px;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+.xp-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--avatar-accent, #e8a33d);
+  transition: width 0.4s ease-out;
+}
+
+.sign-in-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+/* Two-way choice, e.g. who can see you on the map (LocationVisibility.jsx). */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  border-radius: 12px;
+  background: #e2e8f0;
+}
+
+.segmented button {
+  padding: 8px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.segmented button.is-selected {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+.sign-out-button {
+  margin-top: 4px;
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  font: 600 14px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+/* "Explored" tag on a reviewed building's card (game/LocationCard.jsx). */
+.explored-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #34d399;
+  color: #052e16;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
 }

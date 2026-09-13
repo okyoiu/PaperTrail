@@ -9,7 +9,7 @@ export const TELEPORT_PRESETS = [
 // Opened by the bug-icon map control (see debugToggleControl.js), and closes
 // again after each action, because the open panel covers a large part of the
 // map (including buildings you'd click).
-export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateExplored, onClose }) {
+export function TeleportControls({ active, onTeleport, onUseRealGps, onRevealAll, onClose }) {
   function runAndClose(action) {
     action()
     onClose()
@@ -69,8 +69,8 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
       </button>
       <button
         type="button"
-        onClick={() => runAndClose(onSimulateExplored)}
-        title="Preview only - doesn't save these as real visits"
+        onClick={() => runAndClose(onRevealAll)}
+        title="Preview only - lifts the fog without saving any visits"
         style={{
           background: 'transparent',
           color: '#e4ece8',
@@ -80,7 +80,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
           cursor: 'pointer',
         }}
       >
-        Simulate explored
+        Reveal all buildings
       </button>
       <span style={{ color: '#8a9aa1', fontSize: 11 }}>
         Click a building or your character to review; click elsewhere to walk there
