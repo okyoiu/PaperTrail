@@ -10,6 +10,10 @@ create table if not exists profiles (
   created_at timestamptz not null default now()
 );
 
+-- Added after profiles already existed in the live DB, so it needs its own
+-- ALTER: the CREATE TABLE above is skipped once the table exists.
+alter table profiles add column if not exists character_id text;
+
 create table if not exists locations (
   id uuid primary key default gen_random_uuid(),
   google_place_id text unique,
