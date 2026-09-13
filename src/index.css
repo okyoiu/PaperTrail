@@ -624,6 +624,17 @@ code {
   margin-top: 4px;
 }
 
+.review-popup-receipt {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* --- Profile + friends (see social/ProfileSetup.jsx, FriendsPanel.jsx) ---- */
 
 .profile-setup {
@@ -1423,8 +1434,14 @@ code {
   color: #6b6455;
 }
 
-.receipt-close {
+.receipt-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
   margin-top: 16px;
+}
+
+.receipt-close {
   padding: 9px 20px;
   border: 1.5px solid #1a1a1a;
   border-radius: 6px;
@@ -1433,6 +1450,49 @@ code {
   font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace;
   letter-spacing: 1px;
   cursor: pointer;
+}
+
+/* Deleting a review from its receipt, with an "are you sure?" step. */
+.receipt-delete {
+  padding: 9px 20px;
+  border: 1.5px solid #b42318;
+  border-radius: 6px;
+  background: transparent;
+  color: #b42318;
+  font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.receipt-delete--confirm {
+  background: #b42318;
+  color: #fdfcf7;
+}
+
+.receipt-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.receipt-confirm {
+  margin-top: 16px;
+  padding: 12px 10px;
+  border: 1.5px dashed #b42318;
+  border-radius: 8px;
+}
+
+.receipt-confirm p {
+  margin: 0;
+}
+
+.receipt-confirm .receipt-actions {
+  margin-top: 10px;
+}
+
+.receipt-confirm .receipt-confirm-error {
+  margin-top: 8px;
+  color: #b42318;
+  font-size: 11px;
 }
 
 /* --- Photo album (see pages/AlbumPage.jsx) ------------------------------- */

@@ -19,6 +19,23 @@ function saveVisits(visits) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(visits))
 }
 
+// Takes a deleted review's check-in off the visit it was left for, so Visit
+// history offers "Check in" there again. Matched on the review id, or on the
+// photo for visits saved before check-ins kept their review id.
+function withoutReview(visits, reviewId, photoUrl) {
+  return visits.map((visit) =>
+    visit.reviewId === reviewId || (photoUrl && visit.photoUrl === photoUrl)
+      ? { ...visit, reviewId: undefined, rating: undefined, reviewBody: undefined, photoUrl: undefined }
+      : visit,
+  )
+}
+
+// The same, for pages without the tracker (the Album): the map page isn't
+// mounted there, so the saved log is the only copy to fix.
+export function forgetSavedVisitReview(reviewId, photoUrl) {
+  saveVisits(withoutReview(loadVisits(), reviewId, photoUrl))
+}
+
 // Turns raw GPS positions into a deduped log of "places visited".
 export function useVisitTracker() {
   const { position, error: geoError } = useGeolocation()
@@ -69,18 +86,26 @@ export function useVisitTracker() {
     saveVisits([])
   }
 
-  // Attaches a submitted check-in (star rating, note, photo) to the visit it
-  // was left for, so Visit history can show what the user actually did there
-  // instead of just the timestamp.
-  function markVisitReviewed(visitId, { rating, body, photoUrl }) {
+  // Attaches a submitted check-in (review id, star rating, note, photo) to the
+  // visit it was left for, so Visit history can show what the user actually
+  // did there instead of just the timestamp.
+  function markVisitReviewed(visitId, { reviewId, rating, body, photoUrl }) {
     setVisits((prev) => {
       const next = prev.map((visit) =>
-        visit.id === visitId ? { ...visit, rating, reviewBody: body, photoUrl } : visit,
+        visit.id === visitId ? { ...visit, reviewId, rating, reviewBody: body, photoUrl } : visit,
       )
       saveVisits(next)
       return next
     })
   }
 
-  return { position, visits, geoError, placeError, clearVisits, markVisitReviewed }
+  function forgetVisitReview(reviewId, photoUrl) {
+    setVisits((prev) => {
+      const next = withoutReview(prev, reviewId, photoUrl)
+      saveVisits(next)
+      return next
+    })
+  }
+
+  return { position, visits, geoError, placeError, clearVisits, markVisitReviewed, forgetVisitReview }
 }

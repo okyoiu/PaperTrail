@@ -193,6 +193,55 @@ export async function getMyReviews(userId) {
   return data
 }
 
+// The Storage key of a review photo, from the public URL uploadReviewPhoto
+// handed back (.../storage/v1/object/public/review-photos/<key>).
+function reviewPhotoPath(photoUrl) {
+  const marker = `/object/public/${REVIEW_PHOTOS_BUCKET}/`
+  const index = photoUrl?.indexOf(marker) ?? -1
+  return index === -1 ? null : decodeURIComponent(photoUrl.slice(index + marker.length))
+}
+
+// Deletes one of the player's own reviews for good, along with the XP it
+// awarded and its photo. Returns the updated profile. The database takes the
+// explored color off the place when this was the player's last review there
+// (see supabase/schema.sql).
+export async function deleteReview(userId, reviewId) {
+  const { data: review, error } = await supabase
+    .from('reviews')
+    .delete()
+    .eq('id', reviewId)
+    .eq('user_id', userId)
+    .select('xp_awarded, photo_url')
+    .single()
+  // PGRST116 = no row came back: without the delete policy (schema.sql not
+  // re-run), RLS quietly deletes nothing.
+  if (error?.code === 'PGRST116') {
+    throw new Error("Couldn't delete this review - re-run supabase/schema.sql to allow deleting reviews.")
+  }
+  if (error) throw error
+
+  // The review is already gone here, so these are logged rather than thrown:
+  // an error would make a deleted review look like it's still there.
+  const { error: xpError } = await supabase.rpc('increment_xp', {
+    p_user_id: userId,
+    p_amount: -review.xp_awarded,
+  })
+  if (xpError) console.error('Review deleted, but its XP could not be taken back:', xpError)
+
+  const photoPath = reviewPhotoPath(review.photo_url)
+  if (photoPath) {
+    // Without the storage delete policy this reports success but removes nothing.
+    const { data: removed, error: photoError } = await supabase.storage
+      .from(REVIEW_PHOTOS_BUCKET)
+      .remove([photoPath])
+    if (photoError || removed?.length === 0) {
+      console.warn('Review deleted, but its photo is still in Storage - re-run supabase/schema.sql.', photoError ?? '')
+    }
+  }
+
+  return getProfile(userId)
+}
+
 // --- Unlocks (fog of war) ---------------------------------------------------
 
 export async function unlockLocation(userId, place) {

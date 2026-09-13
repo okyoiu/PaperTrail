@@ -102,6 +102,11 @@ create policy "reviews are viewable by everyone" on reviews for select using (tr
 drop policy if exists "users can insert their own reviews" on reviews;
 create policy "users can insert their own reviews" on reviews for insert with check (auth.uid() = user_id);
 
+-- Deleting a review from its visit receipt (see deleteReview in
+-- src/features/backend/api.js).
+drop policy if exists "users can delete their own reviews" on reviews;
+create policy "users can delete their own reviews" on reviews for delete using (auth.uid() = user_id);
+
 drop policy if exists "unlocks are viewable by everyone" on unlocks;
 create policy "unlocks are viewable by everyone" on unlocks for select using (true);
 
@@ -140,6 +145,31 @@ create trigger reviews_mark_explored
   after insert on reviews
   for each row execute function mark_location_explored();
 
+-- And when a review is deleted: explored_at moves to the player's earliest
+-- review still left at that place, or back to null when there are none, so the
+-- building returns to the "walked past" color.
+create or replace function unmark_location_explored()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update unlocks
+  set explored_at = (
+    select min(created_at) from reviews
+    where user_id = old.user_id and location_id = old.location_id
+  )
+  where user_id = old.user_id and location_id = old.location_id;
+  return old;
+end;
+$$;
+
+drop trigger if exists reviews_unmark_explored on reviews;
+create trigger reviews_unmark_explored
+  after delete on reviews
+  for each row execute function unmark_location_explored();
+
 -- Backfill for reviews left before explored_at existed (no-op afterwards).
 insert into unlocks (user_id, location_id, unlocked_at, explored_at)
 select user_id, location_id, min(created_at), min(created_at)
@@ -160,6 +190,14 @@ create policy "authenticated users can upload review photos"
   on storage.objects for insert
   to authenticated
   with check (bucket_id = 'review-photos');
+
+-- A deleted review takes its photo with it. Photos are uploaded under
+-- <user id>/ (see uploadReviewPhoto), so players can only remove their own.
+drop policy if exists "users can delete their own review photos" on storage.objects;
+create policy "users can delete their own review photos"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'review-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- --- Friends + live location sharing (Life360-style) ---------------------
 
