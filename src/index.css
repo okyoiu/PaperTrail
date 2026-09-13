@@ -693,6 +693,20 @@ code {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
+/* A place only friends have reviewed (see MapView's book icons). */
+.map-marker-book--friend {
+  padding: 3px;
+  border: 2px solid var(--pin, #e0654f);
+  border-radius: 50%;
+  background: #fffdf6;
+  font-size: 18px;
+}
+
+.review-popup-author {
+  font-weight: 600;
+  color: #475569;
+}
+
 .review-popup {
   max-height: 260px;
   overflow-y: auto;

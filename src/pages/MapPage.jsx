@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { deleteReview, displayName, getMyReviews } from '../features/backend/api'
+import { deleteReview, displayName, getFriendReviews, getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
 import { ReviewReceipt } from '../features/game/ReviewReceipt'
@@ -39,7 +39,7 @@ export function MapPage() {
   const userId = user?.id
   const { visits, placeError, clearVisits, markVisitReviewed, forgetVisitReview } = useVisitTracker()
   const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
-  const { players } = usePlayersMap(userId, position)
+  const { players, friendIds } = usePlayersMap(userId, position)
   // Reviews are only allowed where the character has been (real GPS or
   // tap-to-walk) - see features/map/characterTrail.js.
   const { hasVisited } = useCharacterTrail()
@@ -71,6 +71,15 @@ export function MapPage() {
       .then(setReviews)
       .catch((err) => console.error('Failed to load reviews:', err))
   }, [userId])
+
+  // Friends' reviews get book icons on the map too, opening read-only receipts.
+  const [friendReviews, setFriendReviews] = useState([])
+  useEffect(() => {
+    if (friendIds.size === 0) return
+    getFriendReviews([...friendIds])
+      .then(setFriendReviews)
+      .catch((err) => console.error("Failed to load friends' reviews:", err))
+  }, [friendIds])
 
   // Places the player has reviewed; the map paints the `osm:` buildings among
   // them in the explored color (see MapView and features/map/buildingsLayer.js).
@@ -158,6 +167,7 @@ export function MapPage() {
         geoError={geoError}
         players={players}
         reviews={reviews}
+        friendReviews={friendReviews}
         exploredPlaceIds={exploredPlaceIds}
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
@@ -325,8 +335,9 @@ export function MapPage() {
           review={viewingReview}
           onClose={() => setViewingReview(null)}
           // Visit history entries saved before check-ins kept their review id
-          // can't be matched to a review, so they open without "Delete".
-          onDelete={user && viewingReview.id ? deleteViewingReview : undefined}
+          // can't be matched to a review, so they open without "Delete" - as do
+          // friends' reviews.
+          onDelete={user && viewingReview.id && !viewingReview.isFriend ? deleteViewingReview : undefined}
         />
       )}
     </div>
