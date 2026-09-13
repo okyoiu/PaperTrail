@@ -13,7 +13,7 @@ function App() {
 
   return (
     <AuthProvider>
-      <div className="app-shell">
+      <div className={immersive ? 'app-shell app-shell--immersive' : 'app-shell'}>
         {!immersive && (
           <header className="app-topbar">
             <h1>Visit Tracker</h1>

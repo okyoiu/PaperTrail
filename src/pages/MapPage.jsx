@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
-import { levelForXp } from '../features/game/xp'
+import { XpBar } from '../features/game/XpBar'
+import { REVIEW_XP_AWARD } from '../features/game/xp'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
 import { useAuth } from '../hooks/useAuth'
@@ -11,6 +12,10 @@ import { useDebugPosition } from '../hooks/useDebugPosition'
 import { useFriendsMap } from '../hooks/useFriendsMap'
 import { useVisitTracker } from '../hooks/useVisitTracker'
 import { resolvePlace } from '../services/googlePlaces'
+
+// Dev preview: open the app with ?xp=46 to see the XP bar without signing in.
+const previewXpParam = import.meta.env.DEV && new URLSearchParams(window.location.search).get('xp')
+const DEV_PREVIEW_XP = previewXpParam ? Number(previewXpParam) : null
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString()
@@ -27,6 +32,12 @@ export function MapPage() {
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [previewXp, setPreviewXp] = useState(DEV_PREVIEW_XP)
+  const hudXp = profile?.xp ?? previewXp
+  // Dev preview (?xp=...): tap the bar to add a review's worth of XP, e.g. to
+  // try the level-up chevron.
+  const addPreviewXp =
+    !profile && previewXp != null ? () => setPreviewXp((xp) => xp + REVIEW_XP_AWARD) : undefined
 
   useEffect(() => {
     if (!userId) return
@@ -104,12 +115,9 @@ export function MapPage() {
         onReviewHere={user ? openReviewHere : undefined}
       />
 
+      <XpBar xp={hudXp} onClick={addPreviewXp} />
+
       <div className="map-hud">
-        {user && profile && (
-          <div className="xp-badge">
-            Lv. {levelForXp(profile.xp)} · {profile.xp} XP
-          </div>
-        )}
         <InstallPrompt />
         <button type="button" className="map-hud-button" onClick={() => setSheetOpen(true)}>
           Details

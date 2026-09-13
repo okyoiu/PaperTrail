@@ -19,7 +19,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
     <div
       style={{
         position: 'absolute',
-        top: 'calc(var(--safe-top, 0px) + 8px)',
+        top: 'calc(var(--safe-top, 0px) + var(--xp-corner-h, 0px) + 8px)', // below MapPage's XP bar
         left: 8,
         zIndex: 10,
         pointerEvents: 'auto',

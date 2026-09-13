@@ -483,7 +483,15 @@ export function MapView({
         />
       )}
       {geoError && !debugPreset && (
-        <p style={{ position: 'absolute', bottom: 56, left: 12, color: '#e8a33d', margin: 0 }}>
+        <p
+          style={{
+            position: 'absolute',
+            bottom: 'calc(var(--bottom-nav-h, 0px) + var(--bottom-nav-fade, 0px) + var(--safe-bottom, 0px) + 44px)',
+            left: 12,
+            color: '#e8a33d',
+            margin: 0,
+          }}
+        >
           {geoError}
         </p>
       )}
