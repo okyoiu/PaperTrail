@@ -453,7 +453,7 @@ export function MapView({
   }, [map, onSelectLocation, onSetDebugPosition])
 
   return (
-    <div style={{ position: 'relative', height: '460px', width: '100%' }}>
+    <div style={{ position: 'relative', height: '560px', width: '100%' }}>
       <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
       {map && <FogOfWar map={map} position={position} revealRadiusMeters={UNLOCK_RADIUS_METERS * 2} />}
       <TeleportControls
