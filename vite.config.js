@@ -36,8 +36,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'RiceHack Quest',
-        short_name: 'Quest',
+        name: 'Paper Trail',
+        short_name: 'Paper Trail',
         description: 'Explore campus, unlock locations, earn XP for reviews.',
         theme_color: '#0f172a',
         background_color: '#0f172a',

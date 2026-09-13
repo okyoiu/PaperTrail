@@ -1,4 +1,4 @@
-# RiceHack Quest
+# Paper Trail
 
 Pokémon-Go-style location game. Players pick an explorer, walk around, and a
 Shadow-of-War-style fog lifts around real 3D buildings (rendered from
