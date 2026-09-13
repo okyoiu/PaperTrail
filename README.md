@@ -64,7 +64,31 @@ Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `GOOGLE_PLACES_API_KEY` a
 3. Mobile: deploy the empty scaffold to Vercel immediately so there's always a live demo link.
 4. All: get a Google Places API key (Places API + Maps JavaScript API enabled) from Google Cloud Console, add to Vercel env vars.
 
+## Persona identity verification (challenge track)
+
+Groundwork is in place; it stays completely inert until two env vars are set, so
+the app builds and runs unchanged when Persona isn't wired up.
+
+- **What it does**: a player can verify their identity through Persona's hosted
+  Inquiry flow and earn a "verified explorer" badge. The completed inquiry id is
+  saved to `profiles.persona_id` (column already in `schema.sql`).
+- **Where it lives**: `src/services/persona.js` (loads the Persona SDK on demand
+  and opens the inquiry), `setPersonaId()` in `src/features/backend/api.js`
+  (persists it), and `src/features/social/VerifyIdentity.jsx` (the Profile-tab
+  button/badge). In dev the section shows a "not configured" hint so it's
+  discoverable; in production it hides until configured.
+- **To turn it on**:
+  1. Create an Inquiry template in the Persona dashboard and copy its template id
+     (`itmpl_…`) and environment id (`env_…`).
+  2. Set `VITE_PERSONA_TEMPLATE_ID` and `VITE_PERSONA_ENVIRONMENT_ID` in `.env`
+     (and in Vercel env vars for the deployed build).
+  3. The "Verify with Persona" button then appears on the Profile tab.
+- **Trust note**: the client-side inquiry result is fine for a demo badge, but
+  isn't tamper-proof. For anything gated on real verification, confirm the
+  inquiry server-side via a Persona webhook or the Persona API before granting
+  it — that's the natural next step and where a small serverless function under
+  `api/` would go.
+
 ## Open items
 
-- **Persona-identity track**: not yet wired up — `profiles.persona_id` in the schema is a placeholder until we know what that integration requires.
 - **GoDaddy domain**: registration prize only, no hosting included — Vercel is the actual host; the domain just gets pointed at it once claimed.

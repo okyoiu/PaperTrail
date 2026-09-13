@@ -101,6 +101,14 @@ export async function updateProfile(userId, fields) {
   return data
 }
 
+// Persona identity verification (challenge track, see services/persona.js).
+// Stores the completed inquiry id on the profile; a non-null persona_id is
+// what marks a player "verified". Kept separate from updateProfile so the
+// verification flow reads clearly at the call site.
+export async function setPersonaId(userId, personaId) {
+  return updateProfile(userId, { persona_id: personaId })
+}
+
 // --- Locations ------------------------------------------------------------
 
 // Reviews/unlocks reference locations.id, but the frontend only knows either

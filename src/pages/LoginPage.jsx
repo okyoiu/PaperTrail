@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from '../services/supabaseClient'
 import { hasChosenUsername, signOut } from '../features/backend/api'
 import { LocationVisibility } from '../features/social/LocationVisibility'
 import { PlayerCard } from '../features/social/PlayerCard'
+import { VerifyIdentity } from '../features/social/VerifyIdentity'
 import { ProfileSetup } from '../features/social/ProfileSetup'
 import { SignIn } from '../features/social/SignIn'
 
@@ -33,6 +34,7 @@ export function LoginPage() {
               onSaved={setProfile}
             />
             <LocationVisibility profile={profile} onSaved={setProfile} />
+            <VerifyIdentity profile={profile} onSaved={setProfile} />
           </>
         ) : (
           <p>Loading your explorer…</p>

@@ -950,3 +950,39 @@ code {
   font-weight: 600;
   vertical-align: middle;
 }
+
+/* --- Persona identity verification (see social/VerifyIdentity.jsx) -------- */
+
+.verify-button {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: #111827;
+  color: #fff;
+  font: 600 14px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.verify-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.verified-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.verified-badge {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
