@@ -11,7 +11,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
     <div
       style={{
         position: 'absolute',
-        top: 8,
+        top: 'calc(var(--safe-top, 0px) + 8px)',
         left: 8,
         zIndex: 10,
         pointerEvents: 'auto',

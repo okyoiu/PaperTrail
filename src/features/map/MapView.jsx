@@ -12,6 +12,7 @@ import {
   setAllBuildings,
   setBuildingUnlocked,
 } from './buildingsLayer'
+import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
 import { TeleportControls } from './TeleportControls'
 import { loadVisitedBuildingIds, saveVisitedBuilding } from './visitedBuildingsStore'
@@ -40,6 +41,8 @@ export function MapView({ userId, onSelectLocation }) {
   const { position: realPosition, error: geoError } = useGeolocation()
   const [debugPreset, setDebugPreset] = useState(null)
   const position = debugPreset ?? realPosition
+  const [debugOpen, setDebugOpen] = useState(false) // debug menu starts hidden
+  const debugToggleRef = useRef(null)
 
   // Map + buildings setup (once).
   useEffect(() => {
@@ -52,6 +55,8 @@ export function MapView({ userId, onSelectLocation }) {
       bearing: -17,
     })
     instance.addControl(new NavigationControl(), 'top-right')
+    debugToggleRef.current = new DebugToggleControl(() => setDebugOpen((open) => !open))
+    instance.addControl(debugToggleRef.current, 'top-right')
 
     instance.on('load', async () => {
       addBuildingsLayer(instance)
@@ -91,6 +96,10 @@ export function MapView({ userId, onSelectLocation }) {
 
     return () => instance.remove()
   }, [userId])
+
+  useEffect(() => {
+    debugToggleRef.current?.setActive(debugOpen)
+  }, [map, debugOpen])
 
   // "You are here" marker.
   const markerRef = useRef(null)
@@ -179,17 +188,19 @@ export function MapView({ userId, onSelectLocation }) {
   }, [map, onSelectLocation])
 
   return (
-    <div style={{ position: 'relative', height: '460px', width: '100%' }}>
+    <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
       {map && <FogOfWar map={map} position={position} revealRadiusMeters={UNLOCK_RADIUS_METERS * 2} />}
-      <TeleportControls
-        active={debugPreset}
-        onTeleport={handleTeleport}
-        onUseRealGps={() => setDebugPreset(null)}
-        onSimulateExplored={handleSimulateExplored}
-      />
+      {debugOpen && (
+        <TeleportControls
+          active={debugPreset}
+          onTeleport={handleTeleport}
+          onUseRealGps={() => setDebugPreset(null)}
+          onSimulateExplored={handleSimulateExplored}
+        />
+      )}
       {geoError && !debugPreset && (
-        <p style={{ position: 'absolute', bottom: 8, left: 8, color: '#e8a33d', margin: 0 }}>
+        <p style={{ position: 'absolute', bottom: 56, left: 12, color: '#e8a33d', margin: 0 }}>
           {geoError}
         </p>
       )}

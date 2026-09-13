@@ -9,6 +9,7 @@ import { MapView } from '../features/map/MapView'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
 import { levelForXp } from '../features/game/xp'
+import InstallPrompt from '../features/mobile/InstallPrompt'
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString()
@@ -44,69 +45,88 @@ export function MapPage() {
   const { position, visits, geoError, placeError, clearVisits } = useVisitTracker()
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [reviewingLocation, setReviewingLocation] = useState(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   return (
-    <div className="page">
-      {user && profile && (
-        <div className="xp-badge" style={{ marginBottom: '1rem' }}>
-          Lv. {levelForXp(profile.xp)} · {profile.xp} XP
+    <div className="page map-page">
+      <MapView userId={user?.id} onSelectLocation={user ? setSelectedLocation : undefined} />
+
+      <div className="map-hud">
+        {user && profile && (
+          <div className="xp-badge">
+            Lv. {levelForXp(profile.xp)} · {profile.xp} XP
+          </div>
+        )}
+        <InstallPrompt />
+        <button type="button" className="map-hud-button" onClick={() => setSheetOpen(true)}>
+          Details
+        </button>
+      </div>
+
+      {sheetOpen && (
+        <div className="map-sheet">
+          <div className="map-sheet-header">
+            <h2>Details</h2>
+            <button type="button" className="map-hud-button" onClick={() => setSheetOpen(false)}>
+              Close
+            </button>
+          </div>
+
+          <section className="status">
+            {geoError && <p className="error">Location error: {geoError}</p>}
+            {placeError && <p className="error">Place lookup error: {placeError}</p>}
+            {position ? (
+              <p>
+                Current location: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}{' '}
+                (±{Math.round(position.accuracy)}m)
+              </p>
+            ) : (
+              <p>Waiting for location permission...</p>
+            )}
+          </section>
+
+          <section className="explore">
+            <h2>Explore (fog of war)</h2>
+            <p>
+              Walk toward a building and it reveals in 3D; click an unlocked one to leave a review
+              and earn XP.
+              {!user && (
+                <>
+                  {' '}
+                  <Link to="/login">Sign in</Link> to save your progress and review places.
+                </>
+              )}
+            </p>
+          </section>
+
+          <FriendsMapSection />
+
+          <section className="visits">
+            <div className="visits-header">
+              <h2>Visit history ({visits.length})</h2>
+              <button type="button" onClick={clearVisits}>
+                Clear
+              </button>
+            </div>
+
+            {visits.length === 0 ? (
+              <p>No visits recorded yet.</p>
+            ) : (
+              <ul>
+                {[...visits].reverse().map((visit) => (
+                  <li key={visit.id}>
+                    <strong>{visit.name ?? visit.address ?? 'Unknown place'}</strong>
+                    <span className="timestamp">{formatTime(visit.timestamp)}</span>
+                    {visit.name && visit.address && (
+                      <span className="address">{visit.address}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       )}
-
-      <section className="status">
-        {geoError && <p className="error">Location error: {geoError}</p>}
-        {placeError && <p className="error">Place lookup error: {placeError}</p>}
-        {position ? (
-          <p>
-            Current location: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}{' '}
-            (±{Math.round(position.accuracy)}m)
-          </p>
-        ) : (
-          <p>Waiting for location permission...</p>
-        )}
-      </section>
-
-      <section className="explore">
-        <h2>Explore (fog of war)</h2>
-        <p>
-          Walk toward a building and it reveals in 3D; click an unlocked one to leave a review
-          and earn XP.
-          {!user && (
-            <>
-              {' '}
-              <Link to="/login">Sign in</Link> to save your progress and review places.
-            </>
-          )}
-        </p>
-        <MapView userId={user?.id} onSelectLocation={user ? setSelectedLocation : undefined} />
-      </section>
-
-      <FriendsMapSection />
-
-      <section className="visits">
-        <div className="visits-header">
-          <h2>Visit history ({visits.length})</h2>
-          <button type="button" onClick={clearVisits}>
-            Clear
-          </button>
-        </div>
-
-        {visits.length === 0 ? (
-          <p>No visits recorded yet.</p>
-        ) : (
-          <ul>
-            {[...visits].reverse().map((visit) => (
-              <li key={visit.id}>
-                <strong>{visit.name ?? visit.address ?? 'Unknown place'}</strong>
-                <span className="timestamp">{formatTime(visit.timestamp)}</span>
-                {visit.name && visit.address && (
-                  <span className="address">{visit.address}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       {reviewingLocation ? (
         <ReviewForm
