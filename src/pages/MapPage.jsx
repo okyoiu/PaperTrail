@@ -1,29 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getMyReviews } from '../features/backend/api'
+import { displayName, getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
-import ReviewViewer from '../features/game/ReviewViewer'
-import { levelForXp } from '../features/game/xp'
+import { ReviewReceipt } from '../features/game/ReviewReceipt'
+import { XpBar } from '../features/game/XpBar'
+import { REVIEW_XP_AWARD } from '../features/game/xp'
+import { BUILDING_COLORS } from '../features/map/buildingsLayer'
+import { POI_LEGEND } from '../features/map/gameStyle'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
+import { CharacterQuickPick } from '../features/social/CharacterQuickPick'
 import { useAuth } from '../hooks/useAuth'
 import { useCharacterTrail } from '../hooks/useCharacterTrail'
 import { useDebugPosition } from '../hooks/useDebugPosition'
-import { useFriendsMap } from '../hooks/useFriendsMap'
+import { usePlayersMap } from '../hooks/usePlayersMap'
 import { useVisitTracker } from '../hooks/useVisitTracker'
 import { resolvePlace } from '../services/googlePlaces'
+
+// Dev preview: open the app with ?xp=46 to see the XP bar without signing in.
+const previewXpParam = import.meta.env.DEV && new URLSearchParams(window.location.search).get('xp')
+const DEV_PREVIEW_XP = previewXpParam ? Number(previewXpParam) : null
 
 function formatTime(timestamp) {
   return new Date(timestamp).toLocaleString()
 }
+
+const LEGEND = [
+  { color: BUILDING_COLORS.locked, label: 'In the fog' },
+  { color: BUILDING_COLORS.unlocked, label: 'Walked past' },
+  { color: BUILDING_COLORS.explored, label: 'Explored (reviewed)' },
+]
 
 export function MapPage() {
   const { user, profile, setProfile } = useAuth()
   const userId = user?.id
   const { visits, placeError, clearVisits, markVisitReviewed } = useVisitTracker()
   const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
-  const { friends } = useFriendsMap(userId, position)
+  const { players } = usePlayersMap(userId, position)
   // Reviews are only allowed where the character has been (real GPS or
   // tap-to-walk) - see features/map/characterTrail.js.
   const { hasVisited } = useCharacterTrail()
@@ -32,8 +46,22 @@ export function MapPage() {
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  // The review whose photo is open full screen (see ReviewViewer).
+  // The visit whose receipt is open full screen (see ReviewReceipt).
   const [viewingReview, setViewingReview] = useState(null)
+
+  // Show a visit as a receipt, tagging it with the current explorer.
+  const openReceipt = (review) =>
+    setViewingReview({
+      ...review,
+      author: review.author ?? (profile ? displayName(profile) : 'You'),
+      characterId: review.characterId ?? profile?.character_id,
+    })
+  const [previewXp, setPreviewXp] = useState(DEV_PREVIEW_XP)
+  const hudXp = profile?.xp ?? previewXp
+  // Dev preview (?xp=...): tap the bar to add a review's worth of XP, e.g. to
+  // try the level-up chevron.
+  const addPreviewXp =
+    !profile && previewXp != null ? () => setPreviewXp((xp) => xp + REVIEW_XP_AWARD) : undefined
 
   useEffect(() => {
     if (!userId) return
@@ -41,6 +69,13 @@ export function MapPage() {
       .then(setReviews)
       .catch((err) => console.error('Failed to load reviews:', err))
   }, [userId])
+
+  // Places the player has reviewed; the map paints the `osm:` buildings among
+  // them in the explored color (see MapView and features/map/buildingsLayer.js).
+  const exploredPlaceIds = useMemo(
+    () => [...new Set(reviews.map((review) => review.locations?.google_place_id).filter(Boolean))],
+    [reviews],
+  )
 
   function openBuildingReview(location) {
     setReviewingVisitId(null)
@@ -105,20 +140,19 @@ export function MapPage() {
         debugPreset={debugPreset}
         onSetDebugPosition={setDebugPosition}
         geoError={geoError}
-        friends={friends}
+        players={players}
         reviews={reviews}
+        exploredPlaceIds={exploredPlaceIds}
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
-        onOpenReview={setViewingReview}
+        onOpenReview={openReceipt}
       />
 
+      <XpBar xp={hudXp} onClick={addPreviewXp} />
+
       <div className="map-hud">
-        {user && profile && (
-          <div className="xp-badge">
-            Lv. {levelForXp(profile.xp)} · {profile.xp} XP
-          </div>
-        )}
         <InstallPrompt />
+        {profile && <CharacterQuickPick profile={profile} onSaved={setProfile} />}
         <button type="button" className="map-hud-button" onClick={() => setSheetOpen(true)}>
           Details
         </button>
@@ -151,14 +185,40 @@ export function MapPage() {
             <h2>Explore (fog of war)</h2>
             <p>
               Walk your character toward a building and it reveals in 3D. Once your character has
-              been there, tap the building or your character to leave a review and earn XP.
+              been there, tap the building or your character to leave a review: that earns XP and
+              paints the building in your explored color, on every device you sign in on.
               {!user && (
                 <>
                   {' '}
-                  <Link to="/login">Sign in</Link> to see friends on the map, leave reviews, and earn XP.
+                  <Link to="/login">Sign in</Link> to see other explorers on the map, leave reviews,
+                  and earn XP.
                 </>
               )}
             </p>
+            <ul className="building-legend" aria-label="Building colors">
+              {LEGEND.map((entry) => (
+                <li key={entry.label}>
+                  <span className="building-legend-swatch" style={{ background: entry.color }} />
+                  {entry.label}
+                </li>
+              ))}
+            </ul>
+            <h3 className="legend-heading">Places around you</h3>
+            <ul className="building-legend" aria-label="Place categories">
+              {POI_LEGEND.map((entry) => (
+                <li key={entry.label}>
+                  <span className="poi-legend-dot" style={{ borderColor: entry.color }} />
+                  {entry.label}
+                </li>
+              ))}
+            </ul>
+            {user && (
+              <p className="explore-players">
+                {players.length === 0
+                  ? 'No other explorers on the map right now.'
+                  : `${players.length} other explorer${players.length === 1 ? '' : 's'} on the map.`}
+              </p>
+            )}
           </section>
 
           <section className="visits">
@@ -192,11 +252,12 @@ export function MapPage() {
                             className="review-photo-button"
                             aria-label="View photo larger"
                             onClick={() =>
-                              setViewingReview({
+                              openReceipt({
                                 title: visit.name ?? visit.address ?? 'Unknown place',
                                 rating: visit.rating,
                                 body: visit.reviewBody,
                                 photoUrl: visit.photoUrl,
+                                date: visit.timestamp,
                               })
                             }
                           >
@@ -234,6 +295,7 @@ export function MapPage() {
           <LocationCard
             location={selectedLocation}
             canReview={selectedLocation.visited}
+            explored={selectedLocation.explored}
             onReview={openBuildingReview}
             onClose={() => setSelectedLocation(null)}
           />
@@ -241,7 +303,7 @@ export function MapPage() {
       )}
 
       {viewingReview && (
-        <ReviewViewer review={viewingReview} onClose={() => setViewingReview(null)} />
+        <ReviewReceipt review={viewingReview} onClose={() => setViewingReview(null)} />
       )}
     </div>
   )

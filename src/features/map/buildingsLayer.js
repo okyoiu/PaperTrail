@@ -58,6 +58,26 @@ function ringCentroid(geometry) {
 
 export const UNNAMED_BUILDING = 'Unnamed building'
 
+// A building's color by how far the player has got with it. Also drawn as the
+// legend in the map's Details sheet (see pages/MapPage.jsx).
+export const BUILDING_COLORS = {
+  locked: '#1b262c', // still in the fog: a flat dark silhouette
+  unlocked: '#d9cfb8', // walked up to: the real building, in 3D
+  explored: '#34d399', // reviewed: claimed in the explored color
+}
+
+// Buildings are stored in Supabase as locations with google_place_id
+// `osm:<feature id>` (see backend/api.js upsertLocation); these convert both
+// ways. The feature id is the building's index in buildings.geojson.
+export function osmPlaceId(featureId) {
+  return `osm:${featureId}`
+}
+
+export function osmIdFromPlaceId(placeId) {
+  const match = /^osm:(\d+)$/.exec(placeId ?? '')
+  return match ? Number(match[1]) : null
+}
+
 // Fetches the whole pre-baked building set once. Static data, so there's no
 // per-move refetching the way a live Overpass query would need.
 export async function fetchAllBuildings() {
@@ -93,9 +113,13 @@ function configureOsmBuildingsLight(map) {
   })
 }
 
+const IS_UNLOCKED = ['boolean', ['feature-state', 'unlocked'], false]
+const IS_EXPLORED = ['boolean', ['feature-state', 'explored'], false]
+
 // Adds the buildings source + a fill-extrusion layer whose height/color read
-// from each feature's `unlocked` feature-state - locked buildings render as
-// flat dark silhouettes (the "fog"), unlocked ones pop up in 3D. Starts empty;
+// from each feature's `unlocked` and `explored` feature-state - locked
+// buildings render as flat dark silhouettes (the "fog"), unlocked ones pop up
+// in 3D, and explored (reviewed) ones take the explored color. Starts empty;
 // see setAllBuildings for how the pre-baked features get loaded in.
 export function addBuildingsLayer(map) {
   configureOsmBuildingsLight(map)
@@ -108,15 +132,21 @@ export function addBuildingsLayer(map) {
     paint: {
       'fill-extrusion-color': [
         'case',
-        ['boolean', ['feature-state', 'unlocked'], false],
-        '#d9cfb8',
-        '#1b262c',
+        IS_EXPLORED,
+        BUILDING_COLORS.explored,
+        IS_UNLOCKED,
+        BUILDING_COLORS.unlocked,
+        BUILDING_COLORS.locked,
       ],
+      // Locked campus buildings render at height 0 so the basemap's own neutral
+      // 3D block shows for them (see gameStyle.js); a walked or reviewed one
+      // rises to its real height, a touch above the basemap block so it wins
+      // the shared footprint cleanly and reads as "lit up".
       'fill-extrusion-height': [
         'case',
-        ['boolean', ['feature-state', 'unlocked'], false],
-        ['coalesce', ['get', 'render_height'], 9],
-        2,
+        ['any', IS_UNLOCKED, IS_EXPLORED],
+        ['+', ['coalesce', ['get', 'render_height'], 9], 1.5],
+        0,
       ],
       // fill-extrusion-opacity doesn't support data/feature-state expressions
       // (MapLibre paint property limitation) - locked vs. unlocked is already
@@ -131,6 +161,15 @@ export function addBuildingsLayer(map) {
 
 export function setBuildingUnlocked(map, featureId, unlocked = true) {
   map.setFeatureState({ source: BUILDINGS_SOURCE_ID, id: featureId }, { unlocked })
+}
+
+// Explored implies unlocked: a review can only be left where the character
+// has walked, and the layer reads both states anyway.
+export function setBuildingExplored(map, featureId, explored = true) {
+  map.setFeatureState(
+    { source: BUILDINGS_SOURCE_ID, id: featureId },
+    explored ? { unlocked: true, explored: true } : { explored: false },
+  )
 }
 
 export function setAllBuildings(map, geojson) {

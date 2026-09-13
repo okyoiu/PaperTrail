@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { hasChosenUsername, updateProfile } from '../backend/api'
-import { CHARACTERS, getCharacter } from '../map/characters'
-import { CharacterFigure } from './CharacterFigure'
+import { getCharacter } from '../map/characters'
+import { CharacterPicker } from './CharacterPicker'
 
 // No "@", so a chosen username can never be mistaken for the email address
 // new profiles start with (see api.hasChosenUsername).
@@ -59,22 +59,7 @@ export function ProfileSetup({ profile, title, onSaved, onSkip }) {
       <span className="profile-setup-label" id={pickerLabelId}>
         Map character
       </span>
-      <div className="character-picker" role="radiogroup" aria-labelledby={pickerLabelId}>
-        {CHARACTERS.map((character) => (
-          <button
-            key={character.id}
-            type="button"
-            role="radio"
-            aria-checked={character.id === characterId}
-            className={character.id === characterId ? 'character-option is-selected' : 'character-option'}
-            style={{ '--avatar-accent': character.accent }}
-            onClick={() => setCharacterId(character.id)}
-          >
-            <CharacterFigure characterId={character.id} />
-            {character.name}
-          </button>
-        ))}
-      </div>
+      <CharacterPicker value={characterId} onChange={setCharacterId} labelledBy={pickerLabelId} />
 
       <button type="submit" disabled={saving}>
         {saving ? 'Saving…' : 'Save'}

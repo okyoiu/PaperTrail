@@ -46,6 +46,14 @@ alter table reviews add column if not exists rating integer check (rating betwee
 -- null means the default one.
 alter table profiles add column if not exists character_id text;
 
+-- Who can see this player's character on the map (see the Profile tab and the
+-- live_locations select policy below): every signed-in explorer, or only
+-- accepted friends. Defaults to everyone so new players show up right away.
+alter table profiles add column if not exists location_visibility text not null default 'everyone';
+alter table profiles drop constraint if exists profiles_location_visibility_check;
+alter table profiles add constraint profiles_location_visibility_check
+  check (location_visibility in ('everyone', 'friends'));
+
 -- Atomic XP increment so concurrent review submissions can't race each other.
 create or replace function increment_xp(p_user_id uuid, p_amount integer)
 returns void as $$
@@ -100,6 +108,46 @@ create policy "unlocks are viewable by everyone" on unlocks for select using (tr
 drop policy if exists "users can insert their own unlocks" on unlocks;
 create policy "users can insert their own unlocks" on unlocks for insert with check (auth.uid() = user_id);
 
+drop policy if exists "users can update their own unlocks" on unlocks;
+create policy "users can update their own unlocks" on unlocks for update using (auth.uid() = user_id);
+
+-- --- Explored buildings ----------------------------------------------------
+-- unlocks is the per-player state of each place: unlocked_at is when their
+-- character first walked up to it (fog lifts, 3D pops up), explored_at is
+-- when they first left a review there (the building gets the "explored"
+-- color on the map, see features/map/buildingsLayer.js). explored_at is
+-- written by the trigger below whenever a review is inserted, so it can
+-- never drift from the reviews table and needs no extra client call.
+alter table unlocks add column if not exists explored_at timestamptz;
+
+create or replace function mark_location_explored()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into unlocks (user_id, location_id, unlocked_at, explored_at)
+  values (new.user_id, new.location_id, new.created_at, new.created_at)
+  on conflict (user_id, location_id) do update
+    set explored_at = coalesce(unlocks.explored_at, excluded.explored_at);
+  return new;
+end;
+$$;
+
+drop trigger if exists reviews_mark_explored on reviews;
+create trigger reviews_mark_explored
+  after insert on reviews
+  for each row execute function mark_location_explored();
+
+-- Backfill for reviews left before explored_at existed (no-op afterwards).
+insert into unlocks (user_id, location_id, unlocked_at, explored_at)
+select user_id, location_id, min(created_at), min(created_at)
+from reviews
+group by user_id, location_id
+on conflict (user_id, location_id) do update
+  set explored_at = coalesce(unlocks.explored_at, excluded.explored_at);
+
 -- Storage: run this after creating the "review-photos" bucket in the dashboard.
 -- A "public" bucket only makes files publicly readable by URL; writes still
 -- need an explicit policy on storage.objects, which is what this adds.
@@ -153,13 +201,19 @@ drop policy if exists "requester or addressee can delete a request" on friend_re
 create policy "requester or addressee can delete a request" on friend_requests
   for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
--- The core of the "only friends can see your dot" rule: a user can select
--- their own row, or a row belonging to someone they have an accepted
--- friend_requests row with (in either direction).
+-- Who sees whose character on the map. A signed-in user can select their own
+-- row, any row whose owner set location_visibility = 'everyone' (the default),
+-- or a friends-only row when they have an accepted friend_requests row with
+-- that person (in either direction). Nothing is visible to anonymous visitors.
 drop policy if exists "see own location or an accepted friend's location" on live_locations;
-create policy "see own location or an accepted friend's location" on live_locations
-  for select using (
+drop policy if exists "see own, public, or an accepted friend's location" on live_locations;
+create policy "see own, public, or an accepted friend's location" on live_locations
+  for select to authenticated using (
     user_id = auth.uid()
+    or exists (
+      select 1 from profiles p
+      where p.id = live_locations.user_id and p.location_visibility = 'everyone'
+    )
     or exists (
       select 1 from friend_requests fr
       where fr.status = 'accepted'
@@ -169,6 +223,10 @@ create policy "see own location or an accepted friend's location" on live_locati
         )
     )
   );
+
+-- The players map only asks for rows updated recently (see
+-- hooks/usePlayersMap.js), so stale rows are cheap to skip.
+create index if not exists live_locations_updated_at_idx on live_locations (updated_at desc);
 
 drop policy if exists "users can upsert their own location" on live_locations;
 create policy "users can upsert their own location" on live_locations

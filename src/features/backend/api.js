@@ -5,14 +5,24 @@ const REVIEW_PHOTOS_BUCKET = 'review-photos'
 
 // --- Auth -------------------------------------------------------------
 
-// Fastest sign-in path for a demo: email magic link, no password. The link
-// returns to this origin if it's in Supabase Auth's Redirect URLs allowlist,
-// otherwise Supabase falls back to the project's Site URL.
+// Fastest sign-in path for a demo: one email with a magic link and a 6-digit
+// code, no password. The link returns to this origin if it's in Supabase
+// Auth's Redirect URLs allowlist, otherwise Supabase falls back to the
+// project's Site URL. The code (see verifyEmailCode) is what makes signing
+// in from the installed PWA work: a tapped link opens in the browser, not the
+// home-screen app, so the session would land in the wrong place.
 export async function signInWithEmail(email) {
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin },
   })
+  if (error) throw error
+}
+
+// The 6-digit code from the sign-in email. Supabase only includes it when the
+// Magic Link email template contains {{ .Token }} (see supabase/README.md).
+export async function verifyEmailCode(email, code) {
+  const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: 'email' })
   if (error) throw error
 }
 
@@ -32,34 +42,71 @@ export function onAuthStateChange(callback) {
 
 // Call this right after sign-in: creates the profiles row the first time a
 // given auth user is seen. Safe to call on every sign-in (no-op afterwards).
-export async function ensureProfile(user) {
-  const { error } = await supabase
+// The username starts out null - profiles are readable by every player, so
+// the email must never be used as a placeholder there. characterId is the
+// explorer picked on the sign-in screen, if any: it's what a brand-new profile
+// starts as, and it overrides the saved one for a returning player who picked
+// again (see social/pendingCharacter.js).
+//
+// Select-then-write rather than upsert on purpose: an upsert always takes the
+// INSERT path under RLS, so an existing player would need the profiles INSERT
+// policy just to sign in - and if that policy has drifted on the database (a
+// real failure mode, see supabase/README.md), their profile would fail to load
+// even though the row is right there. Reading first means returning players
+// only ever UPDATE, and just new players INSERT.
+export async function ensureProfile(user, { characterId = null } = {}) {
+  const existing = await getProfile(user.id)
+  if (existing) {
+    if (characterId && existing.character_id !== characterId) {
+      return updateProfile(user.id, { character_id: characterId })
+    }
+    return existing
+  }
+
+  const { data, error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, username: user.email }, { onConflict: 'id', ignoreDuplicates: true })
-  if (error) throw error
-
-  return getProfile(user.id)
-}
-
-export async function getProfile(userId) {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    .insert({ id: user.id, character_id: characterId })
+    .select()
+    .single()
   if (error) throw error
   return data
 }
 
-// ensureProfile() starts everyone off with their email as a placeholder
-// username; a chosen one can't contain "@" (see social/ProfileSetup.jsx).
+// Returns null when no such profile exists (a not-yet-created one), rather
+// than throwing, so ensureProfile can tell "missing" from a real error.
+export async function getProfile(userId) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Profiles created before usernames started out null hold the email as a
+// placeholder; a chosen one can't contain "@" (see social/ProfileSetup.jsx).
 export function hasChosenUsername(profile) {
   return Boolean(profile?.username) && !profile.username.includes('@')
 }
 
-// fields: any of { username, character_id }. Returns the updated profile.
+// What other players see this profile called. Never the email placeholder.
+export function displayName(profile) {
+  return hasChosenUsername(profile) ? profile.username : 'Explorer'
+}
+
+// fields: any of { username, character_id, location_visibility }. Returns the
+// updated profile.
 export async function updateProfile(userId, fields) {
   const { data, error } = await supabase.from('profiles').update(fields).eq('id', userId).select().single()
   // 23505 = unique_violation (profiles.username is unique).
   if (error?.code === '23505') throw new Error(`"${fields.username}" is already taken - try another.`)
   if (error) throw error
   return data
+}
+
+// Persona identity verification (challenge track, see services/persona.js).
+// Stores the completed inquiry id on the profile; a non-null persona_id is
+// what marks a player "verified". Kept separate from updateProfile so the
+// verification flow reads clearly at the call site.
+export async function setPersonaId(userId, personaId) {
+  return updateProfile(userId, { persona_id: personaId })
 }
 
 // --- Locations ------------------------------------------------------------
@@ -120,7 +167,7 @@ export async function submitReview({ userId, place, rating, body, photoFile }) {
       photo_url: photoUrl,
       xp_awarded: REVIEW_XP_AWARD,
     })
-    .select('*, locations(id, name, lat, lng)')
+    .select('*, locations(id, google_place_id, name, lat, lng)')
     .single()
   if (error) throw error
 
@@ -134,11 +181,12 @@ export async function submitReview({ userId, place, rating, body, photoFile }) {
   return { review, profile }
 }
 
-// Newest first, each with the place it was left at (for the map's book icons).
+// Newest first, each with the place it was left at (for the map's book icons
+// and, via google_place_id, the explored color on `osm:<id>` buildings).
 export async function getMyReviews(userId) {
   const { data, error } = await supabase
     .from('reviews')
-    .select('id, rating, body, photo_url, created_at, locations(id, name, lat, lng)')
+    .select('id, rating, body, photo_url, created_at, locations(id, google_place_id, name, lat, lng)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -159,11 +207,22 @@ export async function unlockLocation(userId, place) {
   return location
 }
 
+// Every place this player has walked up to, with explored_at set on the ones
+// they've also reviewed (kept in sync by a trigger on reviews, see
+// supabase/schema.sql). Falls back to just the unlocks when the explored_at
+// column isn't there yet (schema.sql not re-run): the map still colors
+// reviewed buildings from the reviews list, so this stays a soft dependency.
 export async function getUnlockedLocations(userId) {
   const { data, error } = await supabase
     .from('unlocks')
-    .select('unlocked_at, locations(*)')
+    .select('unlocked_at, explored_at, locations(*)')
     .eq('user_id', userId)
+  // 42703 = undefined_column (explored_at, before the migration is applied).
+  if (error?.code === '42703') {
+    const fallback = await supabase.from('unlocks').select('unlocked_at, locations(*)').eq('user_id', userId)
+    if (fallback.error) throw fallback.error
+    return fallback.data.map((row) => ({ ...row, explored_at: null }))
+  }
   if (error) throw error
   return data
 }
@@ -218,7 +277,7 @@ export async function getFriends(userId) {
   return data.map((row) => (row.requester.id === userId ? row.addressee : row.requester))
 }
 
-// --- Live location (Life360-style friends map) ------------------------
+// --- Live location (other players on the map) -------------------------
 
 export async function updateMyLocation(userId, lat, lng) {
   const { error } = await supabase
@@ -227,20 +286,25 @@ export async function updateMyLocation(userId, lat, lng) {
   if (error) throw error
 }
 
-// RLS on live_locations already restricts rows to "me + accepted friends" —
-// no need to join through getFriends() first.
-export async function getVisibleLocations() {
+// Every player position the current user may see, updated since `since` (a
+// Date). RLS on live_locations decides visibility - own row, players whose
+// profile is set to "everyone", and accepted friends - so there's no need to
+// join through getFriends() first.
+export async function getActivePlayerLocations(since) {
   const { data, error } = await supabase
     .from('live_locations')
     .select('user_id, lat, lng, updated_at, profiles(username, character_id)')
+    .gte('updated_at', since.toISOString())
+    .order('updated_at', { ascending: false })
   if (error) throw error
   return data
 }
 
-// Live updates as friends move, instead of polling getVisibleLocations().
+// Live updates as players move, on top of polling getActivePlayerLocations()
+// (Realtime has to be enabled for the table; polling covers it when it isn't).
 // RLS still applies per-connection, so this only ever fires for rows the
 // current user is allowed to see.
-export function subscribeToVisibleLocations(callback) {
+export function subscribeToPlayerLocations(callback) {
   const channel = supabase
     .channel('live-locations')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, callback)

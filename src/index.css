@@ -12,8 +12,25 @@
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Fredoka', system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
+
+  /* Cozy "travel scrapbook" theme, drawn from the app logo: a navy tile with a
+     cream suitcase of souvenirs (a cafe receipt, a metro card, a postcard, a
+     gold star) and a coral map pin. Used across the non-map tabs so the whole
+     app feels like one thing. */
+  --paper: #f7f0e2;
+  --paper-card: #fffdf6;
+  --paper-sunk: #efe6d2;
+  --paper-edge: #e3d7bd;
+  --ink: #2c2a24;
+  --ink-soft: #736c5b;
+  --navy: #294059;
+  --navy-soft: #3a5271;
+  --pin: #e2574c;
+  --pin-deep: #c8443a;
+  --gold: #e8a33d;
+  --leaf: #6aa864;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -119,18 +136,98 @@ code {
   background: var(--code-bg);
 }
 
-/* --- Game UI: XP badge, install prompt, location review flow ------------ */
+/* --- Game UI: XP bar, install prompt, location review flow -------------- */
 
-.xp-badge {
+/* See game/XpBar.jsx: a hand-drawn loading-bar frame with the level in a
+   white card underneath. */
+.xp-bar {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 13px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* Fixed aspect ratio: the frames' artwork sizes differ slightly, so this keeps
+   the bar from jumping when it steps to the next frame. */
+.xp-bar-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 847 / 252;
+  object-fit: contain;
+}
+
+/* The margin lines it up with the drawn bar's left edge, which sits ~7.5% in
+   from the edge of the frame artwork. */
+.xp-bar-level {
+  position: relative;
+  isolation: isolate; /* keeps the ::before paper behind the text, not the map */
+  margin-left: 7.5%;
+  padding: 3px 12px;
+  color: #111;
+  font: 700 15px/1.4 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* The paper scrap behind the text, roughened by XpBar's #xp-paper filter. It's
+   a pseudo-element so the filter leaves the text crisp. */
+.xp-bar-level::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #fff;
+  filter: url(#xp-paper);
+}
+
+/* Level-up chevron (see XpBar): sits just right of the bar, roughly its
+   height (percentages here are of the bar's width). Pops in, holds until 2s,
+   then fades out. */
+.xp-bar-level-up {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 6px);
+  width: 26%;
+  margin-top: 2%;
+  aspect-ratio: 1122 / 1102;
+  pointer-events: none;
+  animation: xp-level-up 2.4s ease-out forwards;
+}
+
+@keyframes xp-level-up {
+  0% {
+    opacity: 0;
+    transform: translateY(30%) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-8%) scale(1.1);
+  }
+  20%,
+  83% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-25%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-bar-level-up {
+    animation-name: xp-level-up-fade;
+  }
+}
+
+@keyframes xp-level-up-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  83% {
+    opacity: 1;
+  }
 }
 
 .install-button,
@@ -263,7 +360,7 @@ code {
 }
 
 .player-avatar,
-.map-marker-friend,
+.map-marker-player,
 .map-marker-book {
   z-index: 2;
 }
@@ -285,7 +382,8 @@ code {
   transform-origin: 50% 100%;
 }
 
-.player-avatar.is-facing-left .player-avatar-figure {
+.player-avatar.is-facing-left .player-avatar-figure,
+.map-marker-player.is-facing-left .player-avatar-figure {
   transform: scaleX(-1);
 }
 
@@ -306,17 +404,22 @@ code {
   transform-origin: 50% 0;
 }
 
-.player-avatar.is-walking .avatar-body {
+.player-avatar.is-walking .avatar-body,
+.map-marker-player.is-walking .avatar-body {
   animation: avatar-bounce 0.4s ease-in-out infinite;
 }
 
 .player-avatar.is-walking .avatar-leg-front,
-.player-avatar.is-walking .avatar-arm-back {
+.player-avatar.is-walking .avatar-arm-back,
+.map-marker-player.is-walking .avatar-leg-front,
+.map-marker-player.is-walking .avatar-arm-back {
   animation: avatar-swing 0.8s ease-in-out infinite;
 }
 
 .player-avatar.is-walking .avatar-leg-back,
-.player-avatar.is-walking .avatar-arm-front {
+.player-avatar.is-walking .avatar-arm-front,
+.map-marker-player.is-walking .avatar-leg-back,
+.map-marker-player.is-walking .avatar-arm-front {
   animation: avatar-swing 0.8s ease-in-out -0.4s infinite;
 }
 
@@ -402,6 +505,7 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   .player-avatar *,
+  .map-marker-player *,
   .player-ring::after {
     animation: none !important;
   }
@@ -422,29 +526,42 @@ code {
 }
 
 .map-camera-button {
-  background: rgba(16, 27, 33, 0.85);
-  color: #e4ece8;
-  border: 1px solid #2b424c;
+  background: rgba(15, 23, 42, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  padding: 8px 14px;
-  font: 600 13px/1 system-ui, sans-serif;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  padding: 9px 15px;
+  font: 700 13px/1 system-ui, sans-serif;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
   cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
 }
 
 .map-camera-button:hover {
-  background: rgba(16, 27, 33, 0.95);
+  background: rgba(15, 23, 42, 0.92);
 }
 
-/* A friend's character, standing still, with their name above it. */
-.map-marker-friend {
+.map-camera-button:active {
+  transform: scale(0.96);
+}
+
+/* Another player's character with their name above it (see
+   features/map/remotePlayerMarker.js). Friends get their character's accent
+   around the name and a star; everyone else a neutral tag. */
+.map-marker-player {
   display: flex;
   flex-direction: column;
   align-items: center;
   cursor: pointer;
 }
 
-.map-marker-friend svg {
+.map-marker-player .player-avatar-figure {
+  transform-origin: 50% 100%;
+}
+
+.map-marker-player svg {
   display: block;
   width: 30px;
   height: 44px;
@@ -452,18 +569,27 @@ code {
   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
 }
 
-.map-marker-friend-name {
+.map-marker-player-name {
   max-width: 96px;
   margin-bottom: 2px;
   padding: 0 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 2px solid var(--avatar-accent, #16a34a);
+  border: 2px solid rgba(255, 255, 255, 0.6);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.85);
   color: #fff;
   font: 600 11px/16px system-ui, sans-serif;
+}
+
+.map-marker-player.is-friend .map-marker-player-name {
+  border-color: var(--avatar-accent, #16a34a);
+}
+
+.map-marker-player.is-friend .map-marker-player-name::before {
+  content: '★ ';
+  color: var(--avatar-accent, #16a34a);
 }
 
 .map-marker-book {
@@ -506,10 +632,10 @@ code {
   gap: 8px;
   margin: 0 0 1rem;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--paper-edge);
   border-radius: 16px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--paper-card);
+  color: var(--ink);
   text-align: left;
 }
 
@@ -532,17 +658,22 @@ code {
 
 .profile-setup input {
   padding: 10px;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid var(--paper-edge);
   border-radius: 12px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--paper-sunk);
+  color: var(--ink);
   font: inherit;
   font-weight: 400;
 }
 
+.profile-setup input:focus {
+  outline: none;
+  border-color: var(--pin);
+}
+
 .profile-setup-hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ink-soft);
 }
 
 .profile-setup-skip {
@@ -588,17 +719,17 @@ code {
   align-items: center;
   gap: 4px;
   padding: 8px 2px 6px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--paper-edge);
   border-radius: 12px;
-  background: #fff;
-  color: #0f172a;
-  font: 600 12px/1 system-ui, sans-serif;
+  background: var(--paper-card);
+  color: var(--ink);
+  font: 600 12px/1 var(--heading);
   cursor: pointer;
 }
 
 .character-option.is-selected {
   border-color: var(--avatar-accent);
-  background: color-mix(in srgb, var(--avatar-accent) 14%, #fff);
+  background: color-mix(in srgb, var(--avatar-accent) 16%, var(--paper-card));
 }
 
 .character-figure svg {
@@ -609,10 +740,48 @@ code {
 }
 
 /* Head and shoulders in a round badge. */
+/* One-tap character switcher on the map HUD (CharacterQuickPick). Pushed to the
+   right so the Details button sits beside it rather than both claiming the gap. */
+.character-quick-button {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.character-quick-button:active {
+  transform: scale(0.94);
+}
+
+/* .map-hud is absolutely positioned, so this anchors to it and opens upward. */
+.character-quick-sheet {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.28);
+}
+
 .character-avatar {
+  /* inline-block so width/height/overflow clip the figure to a head-and-
+     shoulders badge even outside a flex parent (e.g. the friends cards). */
+  display: inline-block;
+  vertical-align: middle;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
   border: 2px solid var(--avatar-accent);
   border-radius: 50%;
@@ -624,28 +793,726 @@ code {
   margin-left: -5px;
 }
 
-.friends-you {
-  display: flex;
+/* --- Cozy shared UI (buttons, cards, fields) ---------------------------- */
+
+.btn {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 12px;
+  font: 600 14px/1 var(--heading);
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-pin {
+  background: var(--pin);
+  color: #fffdf6;
+  box-shadow: 0 2px 0 var(--pin-deep);
+}
+
+.btn-accept {
+  background: var(--leaf);
+  color: #0f2e14;
+  box-shadow: 0 2px 0 #4f8a4a;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1.5px solid var(--paper-edge);
+}
+
+.cozy-note {
+  padding: 12px 14px;
   margin-bottom: 1rem;
+  border: 1.5px dashed var(--paper-edge);
+  border-radius: 14px;
+  background: var(--paper-card);
+  color: var(--ink-soft);
   font-size: 14px;
 }
 
-.friends ul {
-  list-style: none;
-  padding: 0;
+.cozy-note a {
+  color: var(--pin);
+  font-weight: 600;
 }
 
-.friends li {
+.section-title {
+  margin: 1.4rem 0 0.6rem;
+  font-family: var(--heading);
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+/* --- Friends tab (see social/FriendsPanel.jsx) -------------------------- */
+
+/* Your handle as a little luggage tag, like the souvenirs in the app logo. */
+.friend-tag {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
+  gap: 12px;
+  margin-bottom: 1.1rem;
+  padding: 12px 16px 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--gold) 0%, #f0b95c 100%);
+  color: #3a2708;
+  box-shadow: 0 4px 12px rgba(184, 130, 30, 0.28);
 }
 
-.friends-name {
+.friend-tag-avatar .character-avatar {
+  border-color: #fffdf6;
+  background: #fffdf6;
+}
+
+.friend-tag-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.friend-tag-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.72;
+}
+
+.friend-tag-name {
+  font-family: var(--heading);
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+/* The tag's punched hole. */
+.friend-tag-hole {
+  margin-left: auto;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2px rgba(58, 39, 8, 0.25);
+}
+
+.add-friend {
+  margin-bottom: 0.4rem;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--paper-card);
+  border: 1px solid var(--paper-edge);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--heading);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.field-with-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 12px;
+  background: var(--paper-sunk);
+  border: 1.5px solid var(--paper-edge);
+}
+
+.field-with-button:focus-within {
+  border-color: var(--pin);
+}
+
+.field-icon {
+  flex: none;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.field-with-button input {
   flex: 1;
   min-width: 0;
+  border: none;
+  background: none;
+  padding: 8px 0;
+  font: 400 15px/1.2 var(--sans);
+  color: var(--ink);
+}
+
+.field-with-button input:focus {
+  outline: none;
+}
+
+.field-note {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.field-note--ok {
+  color: #2f7a45;
+}
+
+.field-note--err {
+  color: var(--pin-deep);
+}
+
+.friend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--paper-card);
+  border: 1px solid var(--paper-edge);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.friend-card-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--heading);
+  font-weight: 500;
   overflow-wrap: anywhere;
+}
+
+.friend-card-badge {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--leaf) 20%, #fff);
+  color: #2f7a45;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.friend-card--request {
+  flex-wrap: wrap;
+}
+
+.friend-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-card-actions .btn {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.friend-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  border: 1.5px dashed var(--paper-edge);
+  border-radius: 16px;
+  background: var(--paper-card);
+  color: var(--ink-soft);
+}
+
+.friend-empty-art {
+  width: 64px;
+  height: 64px;
+}
+
+/* --- Sign-in + Profile tab (see social/SignIn.jsx, PlayerCard.jsx) ------- */
+
+.sign-in,
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 1rem 0;
+  padding: 16px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 16px;
+  background: var(--paper-card);
+  color: var(--ink);
+  text-align: left;
+}
+
+.profile-section h3,
+.sign-in label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sign-in input {
+  padding: 10px;
+  border: 1.5px solid var(--paper-edge);
+  border-radius: 12px;
+  background: var(--paper-sunk);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+.sign-in input:focus {
+  outline: none;
+  border-color: var(--pin);
+}
+
+.sign-in input[inputmode='numeric'] {
+  font-size: 22px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+/* The chosen explorer, big, like a character-select screen. */
+.sign-in-hero,
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--avatar-accent, #e8a33d) 16%, #fff);
+  border: 2px solid var(--avatar-accent, #e8a33d);
+  color: #0f172a;
+  text-align: left;
+}
+
+.sign-in-hero h2,
+.player-card h2 {
+  margin: 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+  /* These cards keep a fixed light background in either theme, so the heading
+     must stay dark - otherwise the global h2 color flips to near-white on it. */
+  color: #0f172a;
+}
+
+.sign-in-hero .character-figure svg,
+.player-card .character-figure svg {
+  width: 56px;
+  height: 82px;
+}
+
+.sign-in-hero-label,
+.player-card-meta {
+  font-size: 13px;
+  color: #475569;
+}
+
+.player-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-card-email {
+  font-size: 12px;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+/* The player card reuses the HUD's hand-drawn XP bar (game/XpBar.jsx), so its
+   sizing lives with the .xp-bar rules near the top of this file. Give it room
+   to breathe inside the card. */
+.player-card .xp-bar {
+  width: 100%;
+  margin: 4px 0 2px;
+}
+
+.sign-in-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+/* Two-way choice, e.g. who can see you on the map (LocationVisibility.jsx). */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--paper-edge);
+}
+
+.segmented button {
+  padding: 8px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.segmented button.is-selected {
+  background: var(--pin);
+  color: #fffdf6;
+  box-shadow: 0 2px 0 var(--pin-deep);
+}
+
+.sign-out-button {
+  margin-top: 4px;
+  padding: 9px 16px;
+  border: 1.5px solid var(--paper-edge);
+  border-radius: 12px;
+  background: var(--paper-card);
+  color: var(--ink-soft);
+  font: 600 14px/1 var(--heading);
+  cursor: pointer;
+}
+
+/* "Explored" tag on a reviewed building's card (game/LocationCard.jsx). */
+.explored-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #34d399;
+  color: #052e16;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* --- Persona identity verification (see social/VerifyIdentity.jsx) -------- */
+
+.verify-button {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: #111827;
+  color: #fff;
+  font: 600 14px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.verify-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.verified-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.verified-badge {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* --- Visit receipt (see game/ReviewReceipt.jsx) -------------------------- */
+
+.receipt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-top)) 16px calc(20px + var(--safe-bottom));
+  background: rgba(15, 23, 42, 0.86);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+.receipt {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  padding: 26px 22px 20px;
+  background: #fdfcf7;
+  color: #1a1a1a;
+  font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace;
+  text-align: center;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  /* Perforated top and bottom edges, like a torn receipt. */
+  -webkit-mask:
+    radial-gradient(7px at 7px 0, transparent 6px, #000 6.5px) repeat-x top / 14px 14px,
+    radial-gradient(7px at 7px 100%, transparent 6px, #000 6.5px) repeat-x bottom / 14px 14px,
+    linear-gradient(#000 0 0) center / 100% calc(100% - 20px) no-repeat;
+  mask:
+    radial-gradient(7px at 7px 0, transparent 6px, #000 6.5px) repeat-x top / 14px 14px,
+    radial-gradient(7px at 7px 100%, transparent 6px, #000 6.5px) repeat-x bottom / 14px 14px,
+    linear-gradient(#000 0 0) center / 100% calc(100% - 20px) no-repeat;
+}
+
+.receipt-punch {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  border: 2px dashed #b9b3a0;
+}
+
+.receipt-brand {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.receipt-sub {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6455;
+}
+
+.receipt-rule {
+  height: 0;
+  margin: 12px 0;
+  border-top: 2px solid #1a1a1a;
+}
+
+.receipt-rule--dashed {
+  border-top-style: dashed;
+  border-color: #9c9584;
+}
+
+.receipt-place {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  overflow-wrap: anywhere;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  color: #3a3730;
+}
+
+.receipt-explorer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.receipt-explorer-figure {
+  width: 16px;
+  height: 22px;
+  overflow: visible;
+}
+
+.receipt-explorer-figure svg {
+  display: block;
+  width: 16px;
+  height: 22px;
+}
+
+.receipt-label {
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #6b6455;
+  text-align: left;
+}
+
+.receipt-note {
+  margin: 4px 0 0;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.receipt-rating {
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.receipt-stars {
+  letter-spacing: 2px;
+  color: #d98a1f;
+}
+
+/* The photo pinned on like a polaroid, tilted a hair. */
+.receipt-photo {
+  margin: 16px auto 4px;
+  width: 82%;
+  padding: 8px 8px 22px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  transform: rotate(-2deg);
+}
+
+.receipt-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+/* A faux barcode built from a repeating gradient. */
+.receipt-barcode {
+  height: 34px;
+  margin: 6px 0 8px;
+  background: repeating-linear-gradient(
+    90deg,
+    #1a1a1a 0 2px,
+    transparent 2px 4px,
+    #1a1a1a 4px 7px,
+    transparent 7px 9px,
+    #1a1a1a 9px 10px,
+    transparent 10px 13px
+  );
+}
+
+.receipt-foot {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6455;
+}
+
+.receipt-close {
+  margin-top: 16px;
+  padding: 9px 20px;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #fdfcf7;
+  font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+/* --- Photo album (see pages/AlbumPage.jsx) ------------------------------- */
+
+.album-page {
+  text-align: left;
+}
+
+.album-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.album-count {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.album-empty {
+  padding: 1.5rem 1.25rem;
+  border: 1.5px dashed var(--paper-edge);
+  border-radius: 16px;
+  background: var(--paper-card);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.album-place {
+  margin-bottom: 1.5rem;
+}
+
+.album-place-name {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.album-tile {
+  position: relative;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  background: var(--paper-sunk);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  border: 3px solid #fffdf6;
+  transition: transform 0.12s ease;
+}
+
+.album-tile:active {
+  transform: scale(0.97);
+}
+
+.album-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-tile-date {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 8px 4px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
 }
