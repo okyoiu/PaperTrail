@@ -1,19 +1,18 @@
 import { useId, useState } from 'react'
-import { signInWithEmail } from '../backend/api'
+import { signInAsGuest } from '../backend/api'
 import { CHARACTERS, getCharacter } from '../map/characters'
 import { CharacterFigure } from './CharacterFigure'
 import { CharacterPicker } from './CharacterPicker'
 import { getPendingCharacterId, setPendingCharacterId } from './pendingCharacter'
 
-// Character-select sign-in: pick the explorer you'll walk the map as, then get
-// a magic link by email. Tapping the link signs you in and returns here; the
-// chosen explorer is written to the profile once the session arrives (see
-// pendingCharacter.js). Kept link-only on purpose - the 6-digit code path
-// needs a custom email template that isn't set up.
+// One-tap guest sign-in: pick the explorer you'll walk the map as, then start
+// playing. No email or magic link - so it works in the installed home-screen
+// app on iOS, where a tapped email link would open the browser instead. The
+// account is created instantly; the username popup (ProfileSetupModal) follows
+// so friends can add you. The chosen explorer is applied once the session
+// arrives (see pendingCharacter.js).
 export function SignIn() {
   const [characterId, setCharacterId] = useState(() => getPendingCharacterId() ?? CHARACTERS[0].id)
-  const [email, setEmail] = useState('')
-  const [sentTo, setSentTo] = useState(null) // the address the link went to
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const pickerLabelId = useId()
@@ -24,76 +23,45 @@ export function SignIn() {
     setPendingCharacterId(id)
   }
 
-  async function handleSend(event) {
-    event.preventDefault()
+  async function start() {
     setBusy(true)
     setError(null)
     try {
-      await signInWithEmail(email)
-      setSentTo(email)
+      setPendingCharacterId(characterId)
+      // On success the auth listener in AuthProvider swaps this screen out.
+      await signInAsGuest()
     } catch (err) {
-      setError(err.message)
-    } finally {
+      setError(
+        /anonymous/i.test(err.message)
+          ? 'Guest play isn’t switched on yet. In Supabase → Authentication → Sign In / Providers, enable “Anonymous sign-ins”.'
+          : err.message,
+      )
       setBusy(false)
     }
   }
 
-  const hero = (
-    <div className="sign-in-hero" style={{ '--avatar-accent': character.accent }}>
-      <CharacterFigure characterId={character.id} />
-      <div>
-        <p className="sign-in-hero-label">Your explorer</p>
-        <h2>{character.name}</h2>
-      </div>
-    </div>
-  )
-
-  if (sentTo) {
-    return (
-      <div className="sign-in">
-        {hero}
-        <p>
-          We emailed a sign-in link to <strong>{sentTo}</strong>. Tap it to sign in as{' '}
-          {character.name}, then come back to this page.
-        </p>
-        <div className="sign-in-links">
-          <button type="button" className="link-button" onClick={handleSend} disabled={busy}>
-            {busy ? 'Sending…' : 'Resend link'}
-          </button>
-          <button type="button" className="link-button" onClick={() => setSentTo(null)} disabled={busy}>
-            Use a different email
-          </button>
-        </div>
-        {error && <p className="review-form-error">{error}</p>}
-      </div>
-    )
-  }
-
   return (
-    <form className="sign-in" onSubmit={handleSend}>
-      {hero}
+    <div className="sign-in">
+      <div className="sign-in-hero" style={{ '--avatar-accent': character.accent }}>
+        <CharacterFigure characterId={character.id} />
+        <div>
+          <p className="sign-in-hero-label">Your explorer</p>
+          <h2>{character.name}</h2>
+        </div>
+      </div>
+
       <span className="profile-setup-label" id={pickerLabelId}>
         Choose your explorer
       </span>
       <CharacterPicker value={characterId} onChange={chooseCharacter} labelledBy={pickerLabelId} />
-      <p className="profile-setup-hint">
-        Returning? Your saved explorer stays unless you pick a new one here.
-      </p>
-      <label>
-        Email
-        <input
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoComplete="email"
-          required
-        />
-      </label>
-      <button type="submit" disabled={busy}>
-        {busy ? 'Sending…' : 'Email me a sign-in link'}
+
+      <button type="button" onClick={start} disabled={busy}>
+        {busy ? 'Starting…' : `Start exploring as ${character.name}`}
       </button>
+      <p className="profile-setup-hint">
+        No email needed. You’ll pick a username next so friends can add you.
+      </p>
       {error && <p className="review-form-error">{error}</p>}
-    </form>
+    </div>
   )
 }

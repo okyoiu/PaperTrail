@@ -26,6 +26,16 @@ export async function verifyEmailCode(email, code) {
   if (error) throw error
 }
 
+// Instant guest account: no email, no link, no leaving the app - which is what
+// makes it work in the installed iOS home-screen app, where a tapped email link
+// opens the browser instead. Needs "Anonymous sign-ins" enabled in Supabase
+// (Authentication -> Sign In / Providers). The player still picks a username
+// afterwards so friends can add them (see social/ProfileSetupModal).
+export async function signInAsGuest() {
+  const { error } = await supabase.auth.signInAnonymously()
+  if (error) throw error
+}
+
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
