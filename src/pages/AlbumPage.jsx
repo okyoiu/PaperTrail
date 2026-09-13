@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { displayName, getMyReviews } from '../features/backend/api'
+import { deleteReview, displayName, getMyReviews } from '../features/backend/api'
 import { ReviewReceipt } from '../features/game/ReviewReceipt'
 import { useAuth } from '../hooks/useAuth'
+import { forgetSavedVisitReview } from '../hooks/useVisitTracker'
 import { isSupabaseConfigured } from '../services/supabaseClient'
 
 // A little photo album of your visits: every review photo you've taken, grouped
 // by the place it was taken at (like the Photos view in Apple/Google Maps).
 // Tap one to see the full visit as a receipt.
 export function AlbumPage() {
-  const { user, profile } = useAuth()
+  const { user, profile, setProfile } = useAuth()
   const userId = user?.id
   const [reviews, setReviews] = useState([])
   const [viewing, setViewing] = useState(null)
@@ -57,6 +58,7 @@ export function AlbumPage() {
 
   function openReceipt(review) {
     setViewing({
+      id: review.id,
       title: review.locations?.name ?? 'Unknown place',
       rating: review.rating,
       body: review.body,
@@ -65,6 +67,16 @@ export function AlbumPage() {
       author: profile ? displayName(profile) : 'You',
       characterId: profile?.character_id,
     })
+  }
+
+  // From the receipt's "Delete": out of the album and Visit history, XP taken
+  // back, receipt closed.
+  async function deleteViewingReview() {
+    const updatedProfile = await deleteReview(userId, viewing.id)
+    forgetSavedVisitReview(viewing.id, viewing.photoUrl)
+    setReviews((prev) => prev.filter((review) => review.id !== viewing.id))
+    if (updatedProfile) setProfile(updatedProfile)
+    setViewing(null)
   }
 
   return (
@@ -104,7 +116,9 @@ export function AlbumPage() {
         ))
       )}
 
-      {viewing && <ReviewReceipt review={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <ReviewReceipt review={viewing} onClose={() => setViewing(null)} onDelete={deleteViewingReview} />
+      )}
     </section>
   )
 }

@@ -63,7 +63,8 @@ function createElement(tag, className, text) {
 }
 
 // Built with textContent rather than innerHTML because review text is user input.
-// With onOpenReview, each photo is a button that opens that review larger.
+// With onOpenReview, each review opens as a receipt: tap its photo, or "View
+// receipt" when it has none.
 function reviewPopupContent(name, reviews, onOpenReview) {
   const root = createElement('div', 'review-popup')
   root.append(createElement('strong', null, name))
@@ -75,6 +76,8 @@ function reviewPopupContent(name, reviews, onOpenReview) {
       )
     }
     if (review.body) item.append(createElement('p', null, review.body))
+    const openReceipt = () =>
+      onOpenReview({ id: review.id, title: name, rating: review.rating, body: review.body, photoUrl: review.photo_url })
     if (review.photo_url) {
       const img = createElement('img')
       img.src = review.photo_url
@@ -83,14 +86,18 @@ function reviewPopupContent(name, reviews, onOpenReview) {
         const photoButton = createElement('button', 'review-photo-button')
         photoButton.type = 'button'
         photoButton.setAttribute('aria-label', 'View photo larger')
-        photoButton.addEventListener('click', () =>
-          onOpenReview({ title: name, rating: review.rating, body: review.body, photoUrl: review.photo_url }),
-        )
+        photoButton.addEventListener('click', openReceipt)
         photoButton.append(img)
         item.append(photoButton)
       } else {
         item.append(img)
       }
+    } else if (onOpenReview) {
+      // No photo to tap, so a link opens the receipt (where it can be deleted).
+      const receiptButton = createElement('button', 'review-popup-receipt', 'View receipt')
+      receiptButton.type = 'button'
+      receiptButton.addEventListener('click', openReceipt)
+      item.append(receiptButton)
     }
     root.append(item)
   }
@@ -124,6 +131,7 @@ export function MapView({
   const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
   const exploredIdsRef = useRef(new Set())
+  const paintedExploredPlaceIdsRef = useRef([]) // exploredPlaceIds as of the last paint
   const [debugOpen, setDebugOpen] = useState(false) // debug menu starts hidden
   const debugToggleRef = useRef(null)
   const avatarRef = useRef(null)
@@ -211,9 +219,19 @@ export function MapView({
   }, [map, userId])
 
   // Paint a building in the explored color as soon as it's reviewed (the
-  // list comes from the player's reviews, so this also covers cold loads).
+  // list comes from the player's reviews, so this also covers cold loads), and
+  // back to walked-past once its last review is deleted.
   useEffect(() => {
     if (!map) return
+    const stillExplored = new Set(exploredPlaceIds)
+    for (const placeId of paintedExploredPlaceIdsRef.current) {
+      const id = osmIdFromPlaceId(placeId)
+      if (stillExplored.has(placeId) || id === null || !exploredIdsRef.current.has(id)) continue
+      exploredIdsRef.current.delete(id)
+      setBuildingExplored(map, id, false)
+    }
+    paintedExploredPlaceIdsRef.current = exploredPlaceIds
+
     for (const placeId of exploredPlaceIds) {
       const id = osmIdFromPlaceId(placeId)
       if (id === null || exploredIdsRef.current.has(id) || !buildingsByIdRef.current.has(id)) continue

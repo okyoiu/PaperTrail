@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { displayName, getMyReviews } from '../features/backend/api'
+import { deleteReview, displayName, getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
 import { ReviewReceipt } from '../features/game/ReviewReceipt'
@@ -37,7 +37,7 @@ export function MapPage() {
   const { user, profile, setProfile } = useAuth()
   const { checkAchievements } = useAchievements()
   const userId = user?.id
-  const { visits, placeError, clearVisits, markVisitReviewed } = useVisitTracker()
+  const { visits, placeError, clearVisits, markVisitReviewed, forgetVisitReview } = useVisitTracker()
   const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
   const { players } = usePlayersMap(userId, position)
   // Reviews are only allowed where the character has been (real GPS or
@@ -124,6 +124,7 @@ export function MapPage() {
     setReviews((prev) => [result.review, ...prev])
     if (reviewingVisitId) {
       markVisitReviewed(reviewingVisitId, {
+        reviewId: result.review.id,
         rating: result.review.rating,
         body: result.review.body,
         photoUrl: result.review.photo_url,
@@ -133,6 +134,17 @@ export function MapPage() {
     closeReview()
     // A first review, or a third photo, earns an achievement.
     checkAchievements()
+  }
+
+  // From the open receipt's "Delete": off the map (its building loses the
+  // explored color if this was the last review there) and out of Visit
+  // history, XP taken back, receipt closed.
+  async function deleteViewingReview() {
+    const updatedProfile = await deleteReview(userId, viewingReview.id)
+    forgetVisitReview(viewingReview.id, viewingReview.photoUrl)
+    setReviews((prev) => prev.filter((review) => review.id !== viewingReview.id))
+    if (updatedProfile) setProfile(updatedProfile)
+    setViewingReview(null)
   }
 
   return (
@@ -258,6 +270,7 @@ export function MapPage() {
                             aria-label="View photo larger"
                             onClick={() =>
                               openReceipt({
+                                id: visit.reviewId,
                                 title: visit.name ?? visit.address ?? 'Unknown place',
                                 rating: visit.rating,
                                 body: visit.reviewBody,
@@ -308,7 +321,13 @@ export function MapPage() {
       )}
 
       {viewingReview && (
-        <ReviewReceipt review={viewingReview} onClose={() => setViewingReview(null)} />
+        <ReviewReceipt
+          review={viewingReview}
+          onClose={() => setViewingReview(null)}
+          // Visit history entries saved before check-ins kept their review id
+          // can't be matched to a review, so they open without "Delete".
+          onDelete={user && viewingReview.id ? deleteViewingReview : undefined}
+        />
       )}
     </div>
   )
