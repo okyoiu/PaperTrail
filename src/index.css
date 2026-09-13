@@ -609,6 +609,34 @@ code {
 }
 
 /* Head and shoulders in a round badge. */
+/* One-tap character switcher on the map HUD (CharacterQuickPick). Pushed to the
+   right so the Details button sits beside it rather than both claiming the gap. */
+.character-quick-button {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  cursor: pointer;
+}
+
+/* .map-hud is absolutely positioned, so this anchors to it and opens upward. */
+.character-quick-sheet {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.28);
+}
+
 .character-avatar {
   flex: none;
   width: 36px;

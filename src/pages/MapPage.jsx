@@ -7,6 +7,7 @@ import ReviewViewer from '../features/game/ReviewViewer'
 import { levelForXp } from '../features/game/xp'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
+import { CharacterQuickPick } from '../features/social/CharacterQuickPick'
 import { useAuth } from '../hooks/useAuth'
 import { useCharacterTrail } from '../hooks/useCharacterTrail'
 import { useDebugPosition } from '../hooks/useDebugPosition'
@@ -119,6 +120,7 @@ export function MapPage() {
           </div>
         )}
         <InstallPrompt />
+        {profile && <CharacterQuickPick profile={profile} onSaved={setProfile} />}
         <button type="button" className="map-hud-button" onClick={() => setSheetOpen(true)}>
           Details
         </button>
