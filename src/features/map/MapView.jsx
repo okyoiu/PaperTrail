@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { distanceMeters } from '../../utils/geo'
+import { bearingDegrees, distanceMeters } from '../../utils/geo'
 import { displayName, getUnlockedLocations, unlockLocation } from '../backend/api'
 import {
   addBuildingsLayer,
@@ -51,8 +51,31 @@ function linear(t) {
   return t
 }
 
-function cameraOnPlayer(position, view) {
-  return { center: [position.lng, position.lat], zoom: view.zoom, pitch: view.pitch }
+// Course-up camera: how far the player must move (or how fast) before the map
+// turns to face their heading, so the view looks ahead in the direction of
+// travel instead of snapping to every GPS wobble while standing still.
+const MIN_TURN_METERS = 4
+const MIN_WALK_SPEED_MPS = 0.4
+
+// The direction the player is walking, in degrees clockwise from north, or null
+// when they aren't really moving (keep the last orientation). Prefers the real
+// GPS heading; falls back to the bearing of the step for tap-to-walk / debug.
+function walkHeading(from, to) {
+  if (Number.isFinite(to.heading) && (to.speed == null || to.speed >= MIN_WALK_SPEED_MPS)) {
+    return to.heading
+  }
+  if (from && distanceMeters(from, to) >= MIN_TURN_METERS) {
+    return bearingDegrees(from, to)
+  }
+  return null
+}
+
+// bearing is optional: leaving it out keeps the map's current rotation (so
+// recenter/zoom don't spin the view), passing it turns the map to face there.
+function cameraOnPlayer(position, view, bearing) {
+  const camera = { center: [position.lng, position.lat], zoom: view.zoom, pitch: view.pitch }
+  if (bearing != null) camera.bearing = bearing
+  return camera
 }
 
 function createElement(tag, className, text) {
@@ -162,6 +185,7 @@ export function MapView({
   const [zoomedOut, setZoomedOut] = useState(false)
   const viewRef = useRef(WALKING_VIEW)
   const positionRef = useRef(null)
+  const headingRef = useRef(null) // current course-up bearing
   const userGestureRef = useRef(false)
 
   // Map + buildings setup (once).
@@ -278,13 +302,19 @@ export function MapView({
   useEffect(() => {
     const avatar = avatarRef.current
     if (!map || !avatar || !position) return
+    const previous = positionRef.current
     positionRef.current = position
     const { duration, teleported } = avatar.moveTo(position)
     // Any camera animation would cancel a pinch or drag in progress; the
     // gesture's moveend handler below recenters once it's over.
     if (!followingRef.current || userGestureRef.current) return
 
-    const camera = cameraOnPlayer(position, viewRef.current)
+    // Turn the map to look the way the player is walking. A jump (teleport)
+    // keeps the current orientation rather than spinning to a made-up heading.
+    const heading = teleported ? null : walkHeading(previous, position)
+    if (heading != null) headingRef.current = heading
+
+    const camera = cameraOnPlayer(position, viewRef.current, teleported ? null : headingRef.current)
     if (teleported) map.flyTo({ ...camera, duration: FLY_MS })
     else map.easeTo({ ...camera, duration, easing: linear })
   }, [map, position])
