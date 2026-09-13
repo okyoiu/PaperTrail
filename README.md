@@ -8,6 +8,8 @@ database so it's there on every device. Signed-in players see each other's
 characters walking the map live; each player chooses on their Profile tab
 whether everyone or only accepted friends can see them.
 
+<img width="300" alt="IMG_3664-portrait" src="https://github.com/user-attachments/assets/8c70479e-4f7c-4db1-a95a-99315713dbc9" />
+
 ## Stack
 
 - **Frontend**: React + Vite, packaged as an installable PWA (no App Store needed — open a URL on a phone, "Add to Home Screen"). Routed as a small mobile app: Map / Friends / Login tabs (`src/pages/`, `src/App.jsx`).
