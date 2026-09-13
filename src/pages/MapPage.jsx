@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
+import ReviewViewer from '../features/game/ReviewViewer'
 import { levelForXp } from '../features/game/xp'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
@@ -27,6 +28,8 @@ export function MapPage() {
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // The review whose photo is open full screen (see ReviewViewer).
+  const [viewingReview, setViewingReview] = useState(null)
 
   useEffect(() => {
     if (!userId) return
@@ -102,6 +105,7 @@ export function MapPage() {
         reviews={reviews}
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
+        onOpenReview={setViewingReview}
       />
 
       <div className="map-hud">
@@ -178,7 +182,23 @@ export function MapPage() {
                       <div className="visit-checkin">
                         <span>{'★'.repeat(visit.rating)}{'☆'.repeat(5 - visit.rating)}</span>
                         {visit.reviewBody && <p>{visit.reviewBody}</p>}
-                        {visit.photoUrl && <img src={visit.photoUrl} alt="" />}
+                        {visit.photoUrl && (
+                          <button
+                            type="button"
+                            className="review-photo-button"
+                            aria-label="View photo larger"
+                            onClick={() =>
+                              setViewingReview({
+                                title: visit.name ?? visit.address ?? 'Unknown place',
+                                rating: visit.rating,
+                                body: visit.reviewBody,
+                                photoUrl: visit.photoUrl,
+                              })
+                            }
+                          >
+                            <img src={visit.photoUrl} alt="" />
+                          </button>
+                        )}
                       </div>
                     ) : (
                       user && (
@@ -210,6 +230,10 @@ export function MapPage() {
             onClose={() => setSelectedLocation(null)}
           />
         )
+      )}
+
+      {viewingReview && (
+        <ReviewViewer review={viewingReview} onClose={() => setViewingReview(null)} />
       )}
     </div>
   )
