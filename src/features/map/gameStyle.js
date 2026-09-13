@@ -19,6 +19,8 @@ export const GAME_PALETTE = {
   roadCasing: '#e3dcc4',
   roadMajor: '#fff3d4',
   roadMajorCasing: '#ecd9a6',
+  building: '#e4ddca',
+  buildingRoof: '#efe9da',
 }
 
 // Place categories -> badge color. `class` comes from the OpenMapTiles `poi`
@@ -109,19 +111,32 @@ function recolorBasemap(map) {
   }
 }
 
-// The fog-of-war 3D buildings (features/map/buildingsLayer.js) are the only
-// buildings we want: liberty draws its own full-height buildings from the same
-// OSM data, which would poke through the fog silhouettes. Hide them so the
-// fog stays authoritative. (Off the pre-baked campus set there are then no 3D
-// buildings, which is fine - the demo lives on campus.)
-function hideBasemapBuildings(map) {
-  for (const id of ['building', 'building-3d']) setLayout(map, id, 'visibility', 'none')
+// Keep the basemap's own 3D buildings so the whole city reads as solid blocks
+// (a full-3D Houston), but recolor them to a soft neutral so our campus
+// buildings (features/map/buildingsLayer.js) can highlight on top as they're
+// walked and reviewed. Our layer is added after this one, so at a shared
+// footprint the colored campus building wins; un-walked campus buildings draw
+// at height 0 and let this neutral block show through.
+function styleBasemapBuildings(map) {
+  setLayout(map, 'building-3d', 'visibility', 'visible')
+  setPaint(map, 'building-3d', 'fill-extrusion-color', GAME_PALETTE.building)
+  setPaint(map, 'building-3d', 'fill-extrusion-opacity', 0.92)
+  if (map.getLayer('building-3d')) {
+    try {
+      map.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true)
+    } catch {
+      // Older basemaps may not expose the property; the flat color still reads fine.
+    }
+  }
+  // The flat building fill shows at lower zooms before the extrusion kicks in.
+  setPaint(map, 'building', 'fill-color', GAME_PALETTE.buildingRoof)
 }
 
-// Darken and de-italicize the basemap's place names a touch so they stay
-// legible over the softer ground.
-function polishLabels(map) {
+// Make the place icons a touch bigger and their names crisper, so the little
+// fork / cup / bag glyphs sit clearly on the colored badges.
+function polishPoi(map) {
   for (const id of ['poi_r1', 'poi_r7', 'poi_r20']) {
+    setLayout(map, id, 'icon-size', 1.15)
     setPaint(map, id, 'text-color', '#3f4756')
     setPaint(map, id, 'text-halo-width', 1.4)
   }
@@ -164,7 +179,7 @@ function addPoiBadges(map) {
 // guarded, so a partial basemap still gets whatever styling it supports.
 export function applyGameStyle(map) {
   recolorBasemap(map)
-  hideBasemapBuildings(map)
-  polishLabels(map)
+  styleBasemapBuildings(map)
+  polishPoi(map)
   addPoiBadges(map)
 }

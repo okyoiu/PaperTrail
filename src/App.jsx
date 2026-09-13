@@ -4,6 +4,7 @@ import InstallPrompt from './features/mobile/InstallPrompt'
 import { ProfileSetupModal } from './features/social/ProfileSetupModal'
 import { AuthProvider } from './hooks/useAuth'
 import { AddFriendPage } from './pages/AddFriendPage'
+import { AlbumPage } from './pages/AlbumPage'
 import { LoginPage } from './pages/LoginPage'
 import { MapPage } from './pages/MapPage'
 import './App.css'
@@ -25,6 +26,7 @@ function App() {
           <Routes>
             <Route path="/" element={<MapPage />} />
             <Route path="/friends" element={<AddFriendPage />} />
+            <Route path="/album" element={<AlbumPage />} />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
         </main>

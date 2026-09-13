@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 const TABS = [
   { to: '/', label: 'Map', icon: '🗺️', end: true },
   { to: '/friends', label: 'Friends', icon: '👥' },
+  { to: '/album', label: 'Album', icon: '📸' },
   { to: '/login', label: 'Login', icon: '👤', loggedInLabel: 'Profile' },
 ]
 

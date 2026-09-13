@@ -138,11 +138,15 @@ export function addBuildingsLayer(map) {
         BUILDING_COLORS.unlocked,
         BUILDING_COLORS.locked,
       ],
+      // Locked campus buildings render at height 0 so the basemap's own neutral
+      // 3D block shows for them (see gameStyle.js); a walked or reviewed one
+      // rises to its real height, a touch above the basemap block so it wins
+      // the shared footprint cleanly and reads as "lit up".
       'fill-extrusion-height': [
         'case',
         ['any', IS_UNLOCKED, IS_EXPLORED],
-        ['coalesce', ['get', 'render_height'], 9],
-        2,
+        ['+', ['coalesce', ['get', 'render_height'], 9], 1.5],
+        0,
       ],
       // fill-extrusion-opacity doesn't support data/feature-state expressions
       // (MapLibre paint property limitation) - locked vs. unlocked is already

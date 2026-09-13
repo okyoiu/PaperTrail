@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getMyReviews } from '../features/backend/api'
+import { displayName, getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
-import ReviewViewer from '../features/game/ReviewViewer'
+import { ReviewReceipt } from '../features/game/ReviewReceipt'
 import { XpBar } from '../features/game/XpBar'
 import { REVIEW_XP_AWARD } from '../features/game/xp'
 import { BUILDING_COLORS } from '../features/map/buildingsLayer'
@@ -46,8 +46,16 @@ export function MapPage() {
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  // The review whose photo is open full screen (see ReviewViewer).
+  // The visit whose receipt is open full screen (see ReviewReceipt).
   const [viewingReview, setViewingReview] = useState(null)
+
+  // Show a visit as a receipt, tagging it with the current explorer.
+  const openReceipt = (review) =>
+    setViewingReview({
+      ...review,
+      author: review.author ?? (profile ? displayName(profile) : 'You'),
+      characterId: review.characterId ?? profile?.character_id,
+    })
   const [previewXp, setPreviewXp] = useState(DEV_PREVIEW_XP)
   const hudXp = profile?.xp ?? previewXp
   // Dev preview (?xp=...): tap the bar to add a review's worth of XP, e.g. to
@@ -137,7 +145,7 @@ export function MapPage() {
         exploredPlaceIds={exploredPlaceIds}
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
-        onOpenReview={setViewingReview}
+        onOpenReview={openReceipt}
       />
 
       <XpBar xp={hudXp} onClick={addPreviewXp} />
@@ -244,11 +252,12 @@ export function MapPage() {
                             className="review-photo-button"
                             aria-label="View photo larger"
                             onClick={() =>
-                              setViewingReview({
+                              openReceipt({
                                 title: visit.name ?? visit.address ?? 'Unknown place',
                                 rating: visit.rating,
                                 body: visit.reviewBody,
                                 photoUrl: visit.photoUrl,
+                                date: visit.timestamp,
                               })
                             }
                           >
@@ -294,7 +303,7 @@ export function MapPage() {
       )}
 
       {viewingReview && (
-        <ReviewViewer review={viewingReview} onClose={() => setViewingReview(null)} />
+        <ReviewReceipt review={viewingReview} onClose={() => setViewingReview(null)} />
       )}
     </div>
   )

@@ -999,3 +999,261 @@ code {
   font-size: 13px;
   font-weight: 700;
 }
+
+/* --- Visit receipt (see game/ReviewReceipt.jsx) -------------------------- */
+
+.receipt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-top)) 16px calc(20px + var(--safe-bottom));
+  background: rgba(15, 23, 42, 0.86);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+.receipt {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  padding: 26px 22px 20px;
+  background: #fdfcf7;
+  color: #1a1a1a;
+  font: 12px/1.5 'JetBrains Mono', ui-monospace, monospace;
+  text-align: center;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  /* Perforated top and bottom edges, like a torn receipt. */
+  -webkit-mask:
+    radial-gradient(7px at 7px 0, transparent 6px, #000 6.5px) repeat-x top / 14px 14px,
+    radial-gradient(7px at 7px 100%, transparent 6px, #000 6.5px) repeat-x bottom / 14px 14px,
+    linear-gradient(#000 0 0) center / 100% calc(100% - 20px) no-repeat;
+  mask:
+    radial-gradient(7px at 7px 0, transparent 6px, #000 6.5px) repeat-x top / 14px 14px,
+    radial-gradient(7px at 7px 100%, transparent 6px, #000 6.5px) repeat-x bottom / 14px 14px,
+    linear-gradient(#000 0 0) center / 100% calc(100% - 20px) no-repeat;
+}
+
+.receipt-punch {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  border: 2px dashed #b9b3a0;
+}
+
+.receipt-brand {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.receipt-sub {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6455;
+}
+
+.receipt-rule {
+  height: 0;
+  margin: 12px 0;
+  border-top: 2px solid #1a1a1a;
+}
+
+.receipt-rule--dashed {
+  border-top-style: dashed;
+  border-color: #9c9584;
+}
+
+.receipt-place {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  overflow-wrap: anywhere;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  color: #3a3730;
+}
+
+.receipt-explorer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.receipt-explorer-figure {
+  width: 16px;
+  height: 22px;
+  overflow: visible;
+}
+
+.receipt-explorer-figure svg {
+  display: block;
+  width: 16px;
+  height: 22px;
+}
+
+.receipt-label {
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #6b6455;
+  text-align: left;
+}
+
+.receipt-note {
+  margin: 4px 0 0;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.receipt-rating {
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.receipt-stars {
+  letter-spacing: 2px;
+  color: #d98a1f;
+}
+
+/* The photo pinned on like a polaroid, tilted a hair. */
+.receipt-photo {
+  margin: 16px auto 4px;
+  width: 82%;
+  padding: 8px 8px 22px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  transform: rotate(-2deg);
+}
+
+.receipt-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+/* A faux barcode built from a repeating gradient. */
+.receipt-barcode {
+  height: 34px;
+  margin: 6px 0 8px;
+  background: repeating-linear-gradient(
+    90deg,
+    #1a1a1a 0 2px,
+    transparent 2px 4px,
+    #1a1a1a 4px 7px,
+    transparent 7px 9px,
+    #1a1a1a 9px 10px,
+    transparent 10px 13px
+  );
+}
+
+.receipt-foot {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6455;
+}
+
+.receipt-close {
+  margin-top: 16px;
+  padding: 9px 20px;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #fdfcf7;
+  font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+/* --- Photo album (see pages/AlbumPage.jsx) ------------------------------- */
+
+.album-page {
+  text-align: left;
+}
+
+.album-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.album-count {
+  font-size: 0.85rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.album-empty {
+  padding: 1.25rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.album-place {
+  margin-bottom: 1.5rem;
+}
+
+.album-place-name {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.album-tile {
+  position: relative;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  background: #e2e8f0;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+  transition: transform 0.12s ease;
+}
+
+.album-tile:active {
+  transform: scale(0.97);
+}
+
+.album-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-tile-date {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 8px 4px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+}
