@@ -1,6 +1,28 @@
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// maplibre v6 resolves its worker URL at runtime (`new URL(`./${name}`, ...)`),
+// which the bundler can't follow, so neither the worker nor the shared chunk it
+// imports ever get emitted - the production map stayed blank on a 404. Emit both
+// verbatim and unhashed into /assets so the worker's relative
+// `./maplibre-gl-shared.mjs` import resolves next to it. See setWorkerUrl in MapView.
+function maplibreWorkerAssets() {
+  return {
+    name: 'maplibre-worker-assets',
+    apply: 'build',
+    generateBundle() {
+      for (const name of ['maplibre-gl-worker.mjs', 'maplibre-gl-shared.mjs']) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `assets/${name}`,
+          source: readFileSync(`node_modules/maplibre-gl/dist/${name}`),
+        })
+      }
+    },
+  }
+}
 
 export default defineConfig({
   server: {
@@ -10,6 +32,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    maplibreWorkerAssets(),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
