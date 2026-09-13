@@ -8,9 +8,12 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#0f172a" />
+    <!-- iOS ignores the web manifest's display:standalone for Add to Home
+    Screen - these Apple-specific tags are what actually hide Safari's UI. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title></title>
+    <meta name="apple-mobile-web-app-title" content="Quest" />
+    <title>RiceHack Quest</title>
   </head>
   <body>
     <div id="root"></div>

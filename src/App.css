@@ -140,6 +140,11 @@
   top: var(--safe-top);
 }
 
+/* Camera buttons go below the zoom/compass group and the debug toggle under it. */
+.map-page .map-camera-controls {
+  top: calc(var(--safe-top) + 146px);
+}
+
 .map-page .maplibregl-ctrl-bottom-right {
   bottom: 52px;
 }

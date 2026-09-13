@@ -6,7 +6,15 @@ export const TELEPORT_PRESETS = [
   { name: 'Rice Village', lat: 29.716, lng: -95.4165 },
 ]
 
-export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateExplored }) {
+// Opened by the bug-icon map control (see debugToggleControl.js), and closes
+// again after each action, because the open panel covers a large part of the
+// map (including buildings you'd click).
+export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateExplored, onClose }) {
+  function runAndClose(action) {
+    action()
+    onClose()
+  }
+
   return (
     <div
       style={{
@@ -23,14 +31,15 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
         borderRadius: 8,
         padding: 8,
         fontSize: 12,
+        color: '#e4ece8',
       }}
     >
-      <strong style={{ color: '#e4ece8' }}>Debug: teleport</strong>
+      <strong>Debug: teleport</strong>
       {TELEPORT_PRESETS.map((preset) => (
         <button
           key={preset.name}
           type="button"
-          onClick={() => onTeleport(preset)}
+          onClick={() => runAndClose(() => onTeleport(preset))}
           style={{
             background: active?.name === preset.name ? '#e8a33d' : 'transparent',
             color: active?.name === preset.name ? '#241503' : '#e4ece8',
@@ -46,7 +55,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
       ))}
       <button
         type="button"
-        onClick={onUseRealGps}
+        onClick={() => runAndClose(onUseRealGps)}
         style={{
           background: !active ? '#63b183' : 'transparent',
           color: !active ? '#0d1512' : '#e4ece8',
@@ -60,7 +69,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
       </button>
       <button
         type="button"
-        onClick={onSimulateExplored}
+        onClick={() => runAndClose(onSimulateExplored)}
         title="Preview only - doesn't save these as real visits"
         style={{
           background: 'transparent',
@@ -74,7 +83,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateE
         Simulate explored
       </button>
       <span style={{ color: '#8a9aa1', fontSize: 11 }}>
-        Click the map to move here, or an unlocked building to review it
+        Click a building or your character to review; click elsewhere to walk there
       </span>
     </div>
   )

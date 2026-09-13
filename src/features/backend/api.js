@@ -5,9 +5,14 @@ const REVIEW_PHOTOS_BUCKET = 'review-photos'
 
 // --- Auth -------------------------------------------------------------
 
-// Fastest sign-in path for a demo: email magic link, no password.
+// Fastest sign-in path for a demo: email magic link, no password. The link
+// returns to this origin if it's in Supabase Auth's Redirect URLs allowlist,
+// otherwise Supabase falls back to the project's Site URL.
 export async function signInWithEmail(email) {
-  const { error } = await supabase.auth.signInWithOtp({ email })
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  })
   if (error) throw error
 }
 
@@ -42,6 +47,21 @@ export async function getProfile(userId) {
   return data
 }
 
+// ensureProfile() starts everyone off with their email as a placeholder
+// username; a chosen one can't contain "@" (see social/ProfileSetup.jsx).
+export function hasChosenUsername(profile) {
+  return Boolean(profile?.username) && !profile.username.includes('@')
+}
+
+// fields: any of { username, character_id }. Returns the updated profile.
+export async function updateProfile(userId, fields) {
+  const { data, error } = await supabase.from('profiles').update(fields).eq('id', userId).select().single()
+  // 23505 = unique_violation (profiles.username is unique).
+  if (error?.code === '23505') throw new Error(`"${fields.username}" is already taken - try another.`)
+  if (error) throw error
+  return data
+}
+
 // --- Locations ------------------------------------------------------------
 
 // Reviews/unlocks reference locations.id, but the frontend only knows either
@@ -69,18 +89,24 @@ async function upsertLocation(place) {
 // --- Reviews / XP -----------------------------------------------------------
 
 async function uploadReviewPhoto(userId, photoFile) {
-  const path = `${userId}/${crypto.randomUUID()}-${photoFile.name}`
-  const { error } = await supabase.storage.from(REVIEW_PHOTOS_BUCKET).upload(path, photoFile)
-  if (error) throw error
+  // Not reusing the file name: Storage rejects keys with non-ASCII characters
+  // (e.g. the narrow space in macOS screenshot names).
+  const extension = /\.([a-z0-9]{1,5})$/i.exec(photoFile.name ?? '')?.[1]?.toLowerCase() ?? 'jpg'
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`
+  const { error } = await supabase.storage
+    .from(REVIEW_PHOTOS_BUCKET)
+    .upload(path, photoFile, { contentType: photoFile.type || undefined })
+  if (error) throw new Error(`Photo upload failed: ${error.message}`)
 
   const { data } = supabase.storage.from(REVIEW_PHOTOS_BUCKET).getPublicUrl(path)
   return data.publicUrl
 }
 
 // place: the location the user is standing at/reviewing ({ placeId, name,
-// address, lat, lng } - a Google place or an `osm:<id>` building). photoFile
-// is optional (a File/Blob from CameraCapture).
-export async function submitReview({ userId, place, body, photoFile }) {
+// address, lat, lng } - a Google place, an `osm:<id>` building, or a
+// `pin:<lat>,<lng>` spot). rating is 1-5 stars. photoFile is optional (a
+// File/Blob from CameraCapture).
+export async function submitReview({ userId, place, rating, body, photoFile }) {
   const location = await upsertLocation(place)
   const photoUrl = photoFile ? await uploadReviewPhoto(userId, photoFile) : null
 
@@ -89,11 +115,12 @@ export async function submitReview({ userId, place, body, photoFile }) {
     .insert({
       user_id: userId,
       location_id: location.id,
+      rating,
       body,
       photo_url: photoUrl,
       xp_awarded: REVIEW_XP_AWARD,
     })
-    .select()
+    .select('*, locations(id, name, lat, lng)')
     .single()
   if (error) throw error
 
@@ -105,6 +132,17 @@ export async function submitReview({ userId, place, body, photoFile }) {
 
   const profile = await getProfile(userId)
   return { review, profile }
+}
+
+// Newest first, each with the place it was left at (for the map's book icons).
+export async function getMyReviews(userId) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, body, photo_url, created_at, locations(id, name, lat, lng)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 // --- Unlocks (fog of war) ---------------------------------------------------
@@ -136,7 +174,8 @@ export async function sendFriendRequest(requesterId, addresseeUsername) {
   const { data: addressee, error: lookupError } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', addresseeUsername)
+    // Chosen usernames are stored lowercase (see social/ProfileSetup.jsx).
+    .eq('username', addresseeUsername.trim().toLowerCase())
     .single()
   if (lookupError) throw new Error(`No user found with username "${addresseeUsername}"`)
 
@@ -149,7 +188,7 @@ export async function sendFriendRequest(requesterId, addresseeUsername) {
 export async function getIncomingFriendRequests(userId) {
   const { data, error } = await supabase
     .from('friend_requests')
-    .select('id, created_at, requester:profiles!friend_requests_requester_id_fkey(id, username)')
+    .select('id, created_at, requester:profiles!friend_requests_requester_id_fkey(id, username, character_id)')
     .eq('addressee_id', userId)
     .eq('status', 'pending')
   if (error) throw error
@@ -169,8 +208,8 @@ export async function getFriends(userId) {
   const { data, error } = await supabase
     .from('friend_requests')
     .select(
-      `requester:profiles!friend_requests_requester_id_fkey(id, username),
-       addressee:profiles!friend_requests_addressee_id_fkey(id, username)`,
+      `requester:profiles!friend_requests_requester_id_fkey(id, username, character_id),
+       addressee:profiles!friend_requests_addressee_id_fkey(id, username, character_id)`,
     )
     .eq('status', 'accepted')
     .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
@@ -193,7 +232,7 @@ export async function updateMyLocation(userId, lat, lng) {
 export async function getVisibleLocations() {
   const { data, error } = await supabase
     .from('live_locations')
-    .select('user_id, lat, lng, updated_at, profiles(username)')
+    .select('user_id, lat, lng, updated_at, profiles(username, character_id)')
   if (error) throw error
   return data
 }

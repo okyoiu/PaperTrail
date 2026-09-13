@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   getFriends,
   getIncomingFriendRequests,
+  hasChosenUsername,
   respondToFriendRequest,
   sendFriendRequest,
 } from '../backend/api'
+import { CharacterFigure } from './CharacterFigure'
 
-// Add/accept friends. A friend only shows up on FriendsMap once they're in
+// Add/accept friends. A friend only shows up on the map once they're in
 // the "friends" list below (i.e. an accepted friend_requests row exists).
-export function FriendsPanel({ userId }) {
+export function FriendsPanel({ userId, profile }) {
   const [username, setUsername] = useState('')
   const [friends, setFriends] = useState([])
   const [incoming, setIncoming] = useState([])
@@ -44,12 +47,31 @@ export function FriendsPanel({ userId }) {
     <section className="friends">
       <h2>Friends</h2>
 
+      {profile && hasChosenUsername(profile) && (
+        <p className="friends-you">
+          <CharacterFigure characterId={profile.character_id} crop />
+          <span>
+            Friends can add you as <strong>{profile.username}</strong>
+          </span>
+        </p>
+      )}
+      {profile && !hasChosenUsername(profile) && (
+        <p className="friends-you">
+          <span>
+            <Link to="/login">Pick a username</Link> so friends can find you.
+          </span>
+        </p>
+      )}
+
       <form onSubmit={handleAdd}>
         <input
           type="text"
           placeholder="Add friend by username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
         />
         <button type="submit">Add</button>
       </form>
@@ -61,7 +83,8 @@ export function FriendsPanel({ userId }) {
           <ul>
             {incoming.map((req) => (
               <li key={req.id}>
-                {req.requester.username}
+                <CharacterFigure characterId={req.requester.character_id} crop />
+                <span className="friends-name">{req.requester.username}</span>
                 <button type="button" onClick={() => handleRespond(req.id, true)}>
                   Accept
                 </button>
@@ -77,7 +100,10 @@ export function FriendsPanel({ userId }) {
       <h3>Your friends ({friends.length})</h3>
       <ul>
         {friends.map((f) => (
-          <li key={f.id}>{f.username}</li>
+          <li key={f.id}>
+            <CharacterFigure characterId={f.character_id} crop />
+            <span className="friends-name">{f.username}</span>
+          </li>
         ))}
       </ul>
     </section>
