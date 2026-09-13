@@ -15,6 +15,9 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -48,6 +51,12 @@
   #social .button-icon {
     filter: invert(1) brightness(2);
   }
+}
+
+/* Dev preview: open the app with ?notch to fake iPhone Dynamic Island insets on desktop. */
+:root[data-fake-notch] {
+  --safe-top: 59px;
+  --safe-bottom: 34px;
 }
 
 body {

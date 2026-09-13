@@ -14,6 +14,7 @@ import {
 } from './buildingsLayer'
 import { CameraControls } from './CameraControls'
 import { characterSvg, getCharacter } from './characters'
+import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
 import { createPlayerAvatar } from './playerAvatar'
 import { TeleportControls } from './TeleportControls'
@@ -110,6 +111,8 @@ export function MapView({
   const [map, setMap] = useState(null)
   const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
+  const [debugOpen, setDebugOpen] = useState(false) // debug menu starts hidden
+  const debugToggleRef = useRef(null)
   const avatarRef = useRef(null)
   const friendMarkersRef = useRef(new Map()) // user_id -> Marker
   const bookMarkersRef = useRef([])
@@ -135,6 +138,8 @@ export function MapView({
       bearing: -17,
     })
     instance.addControl(new NavigationControl(), 'top-right')
+    debugToggleRef.current = new DebugToggleControl(() => setDebugOpen((open) => !open))
+    instance.addControl(debugToggleRef.current, 'top-right')
 
     // 'style.load' rather than 'load': 'load' waits until every visible tile
     // has rendered, which left the map unclickable (no dot, no building
@@ -162,6 +167,10 @@ export function MapView({
 
     return () => instance.remove()
   }, [])
+
+  useEffect(() => {
+    debugToggleRef.current?.setActive(debugOpen)
+  }, [map, debugOpen])
 
   // Buildings this user unlocked in earlier sessions or on other devices.
   useEffect(() => {
@@ -453,15 +462,18 @@ export function MapView({
   }, [map, onSelectLocation, onSetDebugPosition])
 
   return (
-    <div style={{ position: 'relative', height: '560px', width: '100%' }}>
+    <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
       {map && <FogOfWar map={map} position={position} revealRadiusMeters={UNLOCK_RADIUS_METERS * 2} />}
-      <TeleportControls
-        active={debugPreset}
-        onTeleport={handleTeleport}
-        onUseRealGps={handleUseRealGps}
-        onSimulateExplored={handleSimulateExplored}
-      />
+      {debugOpen && (
+        <TeleportControls
+          active={debugPreset}
+          onTeleport={handleTeleport}
+          onUseRealGps={handleUseRealGps}
+          onSimulateExplored={handleSimulateExplored}
+          onClose={() => setDebugOpen(false)}
+        />
+      )}
       {map && (
         <CameraControls
           zoomedOut={zoomedOut}
@@ -471,7 +483,7 @@ export function MapView({
         />
       )}
       {geoError && !debugPreset && (
-        <p style={{ position: 'absolute', bottom: 8, left: 8, color: '#e8a33d', margin: 0 }}>
+        <p style={{ position: 'absolute', bottom: 56, left: 12, color: '#e8a33d', margin: 0 }}>
           {geoError}
         </p>
       )}

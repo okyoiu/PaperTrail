@@ -5,6 +5,7 @@ import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
 import { levelForXp } from '../features/game/xp'
 import { MapView } from '../features/map/MapView'
+import InstallPrompt from '../features/mobile/InstallPrompt'
 import { useAuth } from '../hooks/useAuth'
 import { useDebugPosition } from '../hooks/useDebugPosition'
 import { useFriendsMap } from '../hooks/useFriendsMap'
@@ -25,6 +26,7 @@ export function MapPage() {
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => {
     if (!userId) return
@@ -88,87 +90,110 @@ export function MapPage() {
   }
 
   return (
-    <div className="page">
-      {user && profile && (
-        <div className="xp-badge" style={{ marginBottom: '1rem' }}>
-          Lv. {levelForXp(profile.xp)} · {profile.xp} XP
+    <div className="page map-page">
+      <MapView
+        userId={userId}
+        characterId={profile?.character_id}
+        position={position}
+        debugPreset={debugPreset}
+        onSetDebugPosition={setDebugPosition}
+        geoError={geoError}
+        friends={friends}
+        reviews={reviews}
+        onSelectLocation={user ? setSelectedLocation : undefined}
+        onReviewHere={user ? openReviewHere : undefined}
+      />
+
+      <div className="map-hud">
+        {user && profile && (
+          <div className="xp-badge">
+            Lv. {levelForXp(profile.xp)} · {profile.xp} XP
+          </div>
+        )}
+        <InstallPrompt />
+        <button type="button" className="map-hud-button" onClick={() => setSheetOpen(true)}>
+          Details
+        </button>
+      </div>
+
+      {sheetOpen && (
+        <div className="map-sheet">
+          <div className="map-sheet-header">
+            <h2>Details</h2>
+            <button type="button" className="map-hud-button" onClick={() => setSheetOpen(false)}>
+              Close
+            </button>
+          </div>
+
+          <section className="status">
+            {geoError && !debugPreset && <p className="error">Location error: {geoError}</p>}
+            {placeError && <p className="error">Place lookup error: {placeError}</p>}
+            {position ? (
+              <p>
+                {debugPreset ? 'Debug location' : 'Current location'}: {position.lat.toFixed(5)},{' '}
+                {position.lng.toFixed(5)}
+                {position.accuracy != null && ` (±${Math.round(position.accuracy)}m)`}
+              </p>
+            ) : (
+              <p>Waiting for location permission...</p>
+            )}
+          </section>
+
+          <section className="explore">
+            <h2>Explore (fog of war)</h2>
+            <p>
+              Walk toward a building and it reveals in 3D; tap a building or your character to
+              leave a review and earn XP.
+              {!user && (
+                <>
+                  {' '}
+                  <Link to="/login">Sign in</Link> to see friends on the map, leave reviews, and earn XP.
+                </>
+              )}
+            </p>
+          </section>
+
+          <section className="visits">
+            <div className="visits-header">
+              <h2>Visit history ({visits.length})</h2>
+              <button type="button" onClick={clearVisits}>
+                Clear
+              </button>
+            </div>
+
+            {visits.length === 0 ? (
+              <p>No visits recorded yet.</p>
+            ) : (
+              <ul>
+                {/* Newest first, and only the three most recent. */}
+                {visits.slice(-3).reverse().map((visit) => (
+                  <li key={visit.id}>
+                    <strong>{visit.name ?? visit.address ?? 'Unknown place'}</strong>
+                    <span className="timestamp">{formatTime(visit.timestamp)}</span>
+                    {visit.name && visit.address && (
+                      <span className="address">{visit.address}</span>
+                    )}
+
+                    {visit.rating ? (
+                      <div className="visit-checkin">
+                        <span>{'★'.repeat(visit.rating)}{'☆'.repeat(5 - visit.rating)}</span>
+                        {visit.reviewBody && <p>{visit.reviewBody}</p>}
+                        {visit.photoUrl && <img src={visit.photoUrl} alt="" />}
+                      </div>
+                    ) : (
+                      user && (
+                        <button type="button" onClick={() => openVisitCheckIn(visit)}>
+                          Check in
+                        </button>
+                      )
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       )}
-
-      <section className="status">
-        {geoError && !debugPreset && <p className="error">Location error: {geoError}</p>}
-        {placeError && <p className="error">Place lookup error: {placeError}</p>}
-        {position ? (
-          <p>
-            {debugPreset ? 'Debug location' : 'Current location'}: {position.lat.toFixed(5)},{' '}
-            {position.lng.toFixed(5)}
-            {position.accuracy != null && ` (±${Math.round(position.accuracy)}m)`}
-          </p>
-        ) : (
-          <p>Waiting for location permission...</p>
-        )}
-      </section>
-
-      <section className="explore">
-        <h2>Map</h2>
-        {!user && (
-          <p>
-            <Link to="/login">Sign in</Link> to see friends on the map, leave reviews, and earn XP.
-          </p>
-        )}
-        <MapView
-          userId={userId}
-          characterId={profile?.character_id}
-          position={position}
-          debugPreset={debugPreset}
-          onSetDebugPosition={setDebugPosition}
-          geoError={geoError}
-          friends={friends}
-          reviews={reviews}
-          onSelectLocation={user ? setSelectedLocation : undefined}
-          onReviewHere={user ? openReviewHere : undefined}
-        />
-      </section>
-
-      <section className="visits">
-        <div className="visits-header">
-          <h2>Visit history ({visits.length})</h2>
-          <button type="button" onClick={clearVisits}>
-            Clear
-          </button>
-        </div>
-
-        {visits.length === 0 ? (
-          <p>No visits recorded yet.</p>
-        ) : (
-          <ul>
-            {/* Newest first, and only the three most recent. */}
-            {visits.slice(-3).reverse().map((visit) => (
-              <li key={visit.id}>
-                <strong>{visit.name ?? visit.address ?? 'Unknown place'}</strong>
-                <span className="timestamp">{formatTime(visit.timestamp)}</span>
-                {visit.name && visit.address && (
-                  <span className="address">{visit.address}</span>
-                )}
-
-                {visit.rating ? (
-                  <div className="visit-checkin">
-                    <span>{'★'.repeat(visit.rating)}{'☆'.repeat(5 - visit.rating)}</span>
-                    {visit.reviewBody && <p>{visit.reviewBody}</p>}
-                    {visit.photoUrl && <img src={visit.photoUrl} alt="" />}
-                  </div>
-                ) : (
-                  user && (
-                    <button type="button" onClick={() => openVisitCheckIn(visit)}>
-                      Check in
-                    </button>
-                  )
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       {reviewingLocation ? (
         <ReviewForm

@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('notch')) {
+  document.documentElement.dataset.fakeNotch = ''
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
