@@ -31,7 +31,7 @@ function App() {
                   />
                   <circle cx="12" cy="8.6" r="2.4" fill="#fffdf6" />
                 </svg>
-                <span className="app-brand-name">Paper Trail</span>
+                <span className="app-brand-name">PaperTrail</span>
               </span>
               <InstallPrompt />
             </header>

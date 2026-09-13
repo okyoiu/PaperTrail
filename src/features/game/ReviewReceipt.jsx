@@ -50,7 +50,7 @@ export function ReviewReceipt({ review, onClose, onDelete }) {
         <div className="receipt-punch" aria-hidden="true" />
 
         <div className="receipt-head">
-          <div className="receipt-brand">PAPER&nbsp;TRAIL</div>
+          <div className="receipt-brand">PAPERTRAIL</div>
           <div className="receipt-sub">· · ·  VISIT RECEIPT  · · ·</div>
         </div>
 
