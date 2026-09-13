@@ -168,6 +168,11 @@ code {
   object-fit: cover;
 }
 
+.location-card-hint {
+  color: #64748b;
+  font-size: 14px;
+}
+
 .review-form {
   position: absolute;
   bottom: env(safe-area-inset-bottom, 0);

@@ -106,6 +106,12 @@
   font-size: 0.85rem;
 }
 
+/* A visit the character hasn't walked to yet (see hooks/useCharacterTrail.js). */
+.visit-locked {
+  color: #71717a;
+  font-size: 0.85rem;
+}
+
 /* --- Immersive map: edge-to-edge under the notch / Dynamic Island ------- */
 
 .app-content--immersive {

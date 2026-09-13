@@ -14,6 +14,7 @@ import {
 } from './buildingsLayer'
 import { CameraControls } from './CameraControls'
 import { characterSvg, getCharacter } from './characters'
+import { recordPosition } from './characterTrail'
 import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
 import { createPlayerAvatar } from './playerAvatar'
@@ -378,13 +379,17 @@ export function MapView({
     })
   }, [map, reviews, onOpenReview])
 
-  // Reveal buildings the player walks up to, and save that they've been visited.
+  // Add each move to the character's trail (see characterTrail.js) and reveal
+  // buildings anywhere along it - a walk unlocks the ones it passes, not just
+  // the one it stops at - saving that they've been visited.
   useEffect(() => {
     if (!map || !position) return
+    const path = recordPosition(position)
     for (const building of buildingsByIdRef.current.values()) {
       const id = building.id
       if (unlockedIdsRef.current.has(id)) continue
-      if (distanceMeters(building.properties.centroid, position) > UNLOCK_RADIUS_METERS) continue
+      const { centroid } = building.properties
+      if (!path.some((point) => distanceMeters(centroid, point) <= UNLOCK_RADIUS_METERS)) continue
 
       unlockedIdsRef.current.add(id)
       setBuildingUnlocked(map, id, true)
@@ -465,6 +470,9 @@ export function MapView({
       const building = hit && buildingsByIdRef.current.get(hit.id)
       if (building && onSelectLocation) {
         onSelectLocation({
+          // Unlocked = the character has walked here, which is what lets the
+          // player review it ("Simulate explored" only lights buildings up).
+          visited: unlockedIdsRef.current.has(hit.id),
           id: `osm:${hit.id}`,
           name: building.properties.name,
           lat: building.properties.centroid.lat,
