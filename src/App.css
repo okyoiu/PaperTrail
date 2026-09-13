@@ -216,6 +216,13 @@
 
 /* --- Immersive map: edge-to-edge under the notch / Dynamic Island ------- */
 
+/* The map is edge-to-edge: drop the phone-frame width cap so it fills the whole
+   screen on any device, and paint dark behind it so nothing shows white. */
+.app-shell--immersive {
+  max-width: 100%;
+  background: #0f172a;
+}
+
 .app-content--immersive {
   position: relative;
   padding: 0;

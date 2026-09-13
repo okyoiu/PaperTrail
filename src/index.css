@@ -39,7 +39,9 @@
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
-  background: var(--bg);
+  /* Dark app frame so the installed PWA never flashes white behind the map or
+     in the status-bar / home-indicator safe areas. */
+  background: #0f172a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -74,6 +76,12 @@
 :root[data-fake-notch] {
   --safe-top: 59px;
   --safe-bottom: 34px;
+}
+
+html,
+body {
+  min-height: 100dvh;
+  background: #0f172a;
 }
 
 body {
