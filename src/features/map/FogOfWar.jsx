@@ -29,10 +29,14 @@ export function FogOfWar({ map, position, revealRadiusMeters = 60 }) {
         canvas.height = h
       }
       ctx.clearRect(0, 0, w, h)
+
+      // No position yet (permission denied, or GPS still acquiring): leave the
+      // map fully visible. Fogging everything with no reveal hole to punch out
+      // just reads as a broken blank screen.
+      if (!position) return
+
       ctx.fillStyle = FOG_COLOR
       ctx.fillRect(0, 0, w, h)
-
-      if (!position) return
       const center = map.project([position.lng, position.lat])
       const radius = pixelRadiusAt([position.lng, position.lat])
 
