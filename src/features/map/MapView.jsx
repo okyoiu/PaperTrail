@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Map as MapLibreMap, Marker, NavigationControl, Popup } from 'maplibre-gl'
+import { Map as MapLibreMap, Marker, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+// maplibre v6 builds its worker URL at runtime (`new URL(`./${name}`, ...)`),
+// which the bundler can't see statically - so the worker never got emitted and
+// the production build 404'd on it, leaving a blank map. The `?url` import
+// forces it into the build and hands back the correct hashed path.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { distanceMeters } from '../../utils/geo'
 import { getUnlockedLocations, unlockLocation } from '../backend/api'
 import {
@@ -19,6 +24,9 @@ import { FogOfWar } from './FogOfWar'
 import { createPlayerAvatar } from './playerAvatar'
 import { TeleportControls } from './TeleportControls'
 import { loadVisitedBuildingIds, saveVisitedBuilding } from './visitedBuildingsStore'
+
+// Must run before any Map is constructed, hence module scope rather than an effect.
+setWorkerUrl(maplibreWorkerUrl)
 
 const UNLOCK_RADIUS_METERS = 30
 const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
