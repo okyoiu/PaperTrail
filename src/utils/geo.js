@@ -5,6 +5,16 @@ function toRadians(deg) {
   return (deg * Math.PI) / 180
 }
 
+// Initial compass bearing from a to b, in degrees clockwise from north (0-360).
+export function bearingDegrees(a, b) {
+  const lat1 = toRadians(a.lat)
+  const lat2 = toRadians(b.lat)
+  const dLng = toRadians(b.lng - a.lng)
+  const y = Math.sin(dLng) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng)
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
+}
+
 // Great-circle distance between two lat/lng points, in meters.
 export function distanceMeters(a, b) {
   const dLat = toRadians(b.lat - a.lat)

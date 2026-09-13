@@ -113,9 +113,9 @@ export function MapPage() {
         <h2>Map</h2>
         {user ? (
           <p>
-            Walk toward buildings to reveal them. Tap a building or your orange dot to leave a
-            review with a photo and earn +{XP_PER_REVIEW} XP. Green dots are friends; 📖 marks
-            places you've reviewed.
+            Walk toward buildings to reveal them. Tap a building or your character to leave a
+            review with a photo and earn +{XP_PER_REVIEW} XP. Friends show up as their characters;
+            📖 marks places you've reviewed.
           </p>
         ) : (
           <p>
@@ -124,6 +124,7 @@ export function MapPage() {
         )}
         <MapView
           userId={userId}
+          characterId={profile?.character_id}
           position={position}
           debugPreset={debugPreset}
           onSetDebugPosition={setDebugPosition}

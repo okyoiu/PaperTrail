@@ -12,12 +12,35 @@ import {
   setBuildingUnlocked,
   UNNAMED_BUILDING,
 } from './buildingsLayer'
+import { CameraControls } from './CameraControls'
+import { characterSvg, getCharacter } from './characters'
 import { FogOfWar } from './FogOfWar'
+import { createPlayerAvatar } from './playerAvatar'
 import { TeleportControls } from './TeleportControls'
 import { loadVisitedBuildingIds, saveVisitedBuilding } from './visitedBuildingsStore'
 
 const UNLOCK_RADIUS_METERS = 30
 const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
+
+// Camera presets. The walking view hugs the player the way Pokemon Go does;
+// the overview pulls back far enough to see a good chunk of campus.
+const WALKING_VIEW = { zoom: 18, pitch: 60 }
+const OVERVIEW = { zoom: 15.5, pitch: 40 }
+const ZOOMED_OUT_BELOW = (WALKING_VIEW.zoom + OVERVIEW.zoom) / 2
+// After a drag, the camera snaps back if the player is still within this
+// fraction of the map's shorter side from center; any farther and it detaches
+// so the user can look around.
+const DETACH_FRACTION = 0.25
+const FLY_MS = 1500
+const VIEW_CHANGE_MS = 900
+
+function linear(t) {
+  return t
+}
+
+function cameraOnPlayer(position, view) {
+  return { center: [position.lng, position.lat], zoom: view.zoom, pitch: view.pitch }
+}
 
 function osmIdFromPlaceId(placeId) {
   const match = /^osm:(\d+)$/.exec(placeId ?? '')
@@ -54,11 +77,26 @@ function reviewPopupContent(name, reviews) {
   return root
 }
 
-// The one map: MapLibre + 3D fog-of-war buildings, the player's dot (tap it
-// to review where you're standing), accepted friends' dots, and a book icon
-// on every place the player has reviewed.
+// A friend's character with their name above it. Only rebuilt when one of
+// those changes, since this runs whenever any friend moves.
+function renderFriendMarker(element, username, character) {
+  const key = `${character.id}:${username}`
+  if (element.dataset.key === key) return
+  element.dataset.key = key
+  element.style.setProperty('--avatar-accent', character.accent)
+  const figure = createElement('div')
+  figure.innerHTML = characterSvg(character) // static markup, see characters.js
+  // The name is user input, so it goes in as text.
+  element.replaceChildren(createElement('span', 'map-marker-friend-name', username), figure)
+}
+
+// The one map: MapLibre + 3D fog-of-war buildings, the player's character
+// (tap it to review where you're standing) with a camera that follows it,
+// accepted friends' characters, and a book icon on every place the player
+// has reviewed.
 export function MapView({
   userId,
+  characterId,
   position,
   debugPreset,
   onSetDebugPosition,
@@ -72,9 +110,19 @@ export function MapView({
   const [map, setMap] = useState(null)
   const buildingsByIdRef = useRef(new Map()) // feature id -> GeoJSON feature
   const unlockedIdsRef = useRef(new Set())
-  const selfMarkerRef = useRef(null)
+  const avatarRef = useRef(null)
   const friendMarkersRef = useRef(new Map()) // user_id -> Marker
   const bookMarkersRef = useRef([])
+
+  // Camera. While `following`, it stays centered on the player at viewRef's
+  // zoom/pitch - a preset, or wherever the user last pinched/scrolled to. The
+  // refs mirror state that map event handlers need to read.
+  const [following, setFollowing] = useState(true)
+  const followingRef = useRef(true)
+  const [zoomedOut, setZoomedOut] = useState(false)
+  const viewRef = useRef(WALKING_VIEW)
+  const positionRef = useRef(null)
+  const userGestureRef = useRef(false)
 
   // Map + buildings setup (once).
   useEffect(() => {
@@ -130,22 +178,86 @@ export function MapView({
       .catch((err) => console.error('Failed to load saved visits from Supabase:', err))
   }, [map, userId])
 
-  // "You are here" marker.
+  // The player's character. It isn't drawn until the first position arrives.
   useEffect(() => {
-    if (!map || !position) return
-    if (!selfMarkerRef.current) {
-      selfMarkerRef.current = new Marker({ element: createElement('div', 'map-marker-self') })
-        .setLngLat([position.lng, position.lat])
-        .addTo(map)
-    } else {
-      selfMarkerRef.current.setLngLat([position.lng, position.lat])
+    if (!map) return
+    const avatar = createPlayerAvatar(map)
+    avatarRef.current = avatar
+    return () => {
+      avatar.remove()
+      avatarRef.current = null
     }
+  }, [map])
+
+  // Swapped in place, so picking a new character doesn't reset the walk.
+  useEffect(() => {
+    avatarRef.current?.setCharacter(getCharacter(characterId))
+  }, [map, characterId])
+
+  // Walk the character to each new position, with the camera following in
+  // step (same duration, linear easing) so the character stays centered.
+  useEffect(() => {
+    const avatar = avatarRef.current
+    if (!map || !avatar || !position) return
+    positionRef.current = position
+    const { duration, teleported } = avatar.moveTo(position)
+    // Any camera animation would cancel a pinch or drag in progress; the
+    // gesture's moveend handler below recenters once it's over.
+    if (!followingRef.current || userGestureRef.current) return
+
+    const camera = cameraOnPlayer(position, viewRef.current)
+    if (teleported) map.flyTo({ ...camera, duration: FLY_MS })
+    else map.easeTo({ ...camera, duration, easing: linear })
   }, [map, position])
 
-  // Tapping your own dot reviews the nearest named building in unlock range,
-  // or else a bare pin that MapPage names.
+  // While following, zoom gestures pivot on the player instead of the cursor.
   useEffect(() => {
-    const element = selfMarkerRef.current?.getElement()
+    if (!map) return
+    const options = following ? { around: 'center' } : undefined
+    map.scrollZoom.enable(options)
+    map.touchZoomRotate.enable(options)
+  }, [map, following])
+
+  // Only user gestures (drag, pinch, scroll, zoom buttons) carry
+  // originalEvent, which tells them apart from the follow camera's own moves.
+  useEffect(() => {
+    if (!map) return
+
+    function onMoveStart(e) {
+      if (e.originalEvent) userGestureRef.current = true
+    }
+
+    function onMoveEnd(e) {
+      if (!e.originalEvent || !userGestureRef.current) return
+      userGestureRef.current = false
+      viewRef.current = { zoom: map.getZoom(), pitch: map.getPitch() }
+      setZoomedOut(map.getZoom() < ZOOMED_OUT_BELOW)
+
+      const current = positionRef.current
+      if (!followingRef.current || !current) return
+      const player = map.project([current.lng, current.lat])
+      const { clientWidth: width, clientHeight: height } = map.getContainer()
+      const offCenter = Math.hypot(player.x - width / 2, player.y - height / 2)
+      if (offCenter > Math.min(width, height) * DETACH_FRACTION) {
+        followingRef.current = false
+        setFollowing(false)
+      } else if (offCenter > 1) {
+        map.easeTo({ ...cameraOnPlayer(current, viewRef.current), duration: 300 })
+      }
+    }
+
+    map.on('movestart', onMoveStart)
+    map.on('moveend', onMoveEnd)
+    return () => {
+      map.off('movestart', onMoveStart)
+      map.off('moveend', onMoveEnd)
+    }
+  }, [map])
+
+  // Tapping your character reviews the nearest named building in unlock
+  // range, or else a bare pin that MapPage names.
+  useEffect(() => {
+    const element = avatarRef.current?.element
     if (!element || !position || !onReviewHere) return
 
     function handleClick() {
@@ -178,7 +290,7 @@ export function MapView({
     }
 
     element.classList.add('is-clickable')
-    element.title = 'Leave a review here'
+    element.setAttribute('title', 'Leave a review here')
     element.addEventListener('click', handleClick)
     return () => {
       element.removeEventListener('click', handleClick)
@@ -187,7 +299,7 @@ export function MapView({
     }
   }, [map, position, onReviewHere])
 
-  // Friends' dots, kept in sync with live_locations.
+  // Friends' characters, kept in sync with live_locations.
   useEffect(() => {
     if (!map) return
     const markers = friendMarkersRef.current
@@ -198,15 +310,15 @@ export function MapView({
       const username = friend.profiles?.username ?? 'Friend'
       let marker = markers.get(friend.user_id)
       if (!marker) {
-        const element = createElement('div', 'map-marker-friend', username.charAt(0).toUpperCase())
-        marker = new Marker({ element })
+        marker = new Marker({ element: createElement('div', 'map-marker-friend'), anchor: 'bottom' })
           .setLngLat([friend.lng, friend.lat])
-          .setPopup(new Popup({ offset: 14, closeButton: false }))
+          .setPopup(new Popup({ offset: 68, closeButton: false }))
           .addTo(map)
         markers.set(friend.user_id, marker)
       } else {
         marker.setLngLat([friend.lng, friend.lat])
       }
+      renderFriendMarker(marker.getElement(), username, getCharacter(friend.profiles?.character_id))
       marker.getPopup().setText(`${username} · updated ${new Date(friend.updated_at).toLocaleTimeString()}`)
     }
 
@@ -268,9 +380,38 @@ export function MapView({
     }
   }, [map, position, userId])
 
+  function startFollowing() {
+    followingRef.current = true
+    setFollowing(true)
+  }
+
+  function handleRecenter() {
+    startFollowing()
+    const current = positionRef.current
+    if (current) map?.easeTo({ ...cameraOnPlayer(current, viewRef.current), duration: VIEW_CHANGE_MS })
+  }
+
+  // Zooms around the player while following, or around the middle of the map
+  // after panning away.
+  function handleToggleZoom() {
+    if (!map) return
+    const view = viewRef.current.zoom < ZOOMED_OUT_BELOW ? WALKING_VIEW : OVERVIEW
+    viewRef.current = view
+    setZoomedOut(view === OVERVIEW)
+    const current = positionRef.current
+    const camera = followingRef.current && current ? cameraOnPlayer(current, view) : view
+    map.easeTo({ ...camera, duration: VIEW_CHANGE_MS })
+  }
+
   function handleTeleport(preset) {
     onSetDebugPosition(preset)
-    map?.flyTo({ center: [preset.lng, preset.lat], zoom: 16 })
+    startFollowing()
+    map?.flyTo({ ...cameraOnPlayer(preset, viewRef.current), duration: FLY_MS })
+  }
+
+  function handleUseRealGps() {
+    onSetDebugPosition(null)
+    startFollowing()
   }
 
   // Preview-only: lights up every building already loaded nearby so you can
@@ -286,8 +427,8 @@ export function MapView({
   }
 
   // Click any building to open its review card (see MapPage). Click anywhere
-  // else to drop the "you are here" debug dot there, so exploration can be
-  // tested without real GPS.
+  // else to walk the character there (a debug position), so exploration can
+  // be tested without real GPS.
   useEffect(() => {
     if (!map) return
     function onClick(e) {
@@ -318,9 +459,17 @@ export function MapView({
       <TeleportControls
         active={debugPreset}
         onTeleport={handleTeleport}
-        onUseRealGps={() => onSetDebugPosition(null)}
+        onUseRealGps={handleUseRealGps}
         onSimulateExplored={handleSimulateExplored}
       />
+      {map && (
+        <CameraControls
+          zoomedOut={zoomedOut}
+          showRecenter={!following && Boolean(position)}
+          onToggleZoom={handleToggleZoom}
+          onRecenter={handleRecenter}
+        />
+      )}
       {geoError && !debugPreset && (
         <p style={{ position: 'absolute', bottom: 8, left: 8, color: '#e8a33d', margin: 0 }}>
           {geoError}

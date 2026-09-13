@@ -47,6 +47,21 @@ export async function getProfile(userId) {
   return data
 }
 
+// ensureProfile() starts everyone off with their email as a placeholder
+// username; a chosen one can't contain "@" (see social/ProfileSetup.jsx).
+export function hasChosenUsername(profile) {
+  return Boolean(profile?.username) && !profile.username.includes('@')
+}
+
+// fields: any of { username, character_id }. Returns the updated profile.
+export async function updateProfile(userId, fields) {
+  const { data, error } = await supabase.from('profiles').update(fields).eq('id', userId).select().single()
+  // 23505 = unique_violation (profiles.username is unique).
+  if (error?.code === '23505') throw new Error(`"${fields.username}" is already taken - try another.`)
+  if (error) throw error
+  return data
+}
+
 // --- Locations ------------------------------------------------------------
 
 // Reviews/unlocks reference locations.id, but the frontend only knows either
@@ -159,7 +174,8 @@ export async function sendFriendRequest(requesterId, addresseeUsername) {
   const { data: addressee, error: lookupError } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', addresseeUsername)
+    // Chosen usernames are stored lowercase (see social/ProfileSetup.jsx).
+    .eq('username', addresseeUsername.trim().toLowerCase())
     .single()
   if (lookupError) throw new Error(`No user found with username "${addresseeUsername}"`)
 
@@ -172,7 +188,7 @@ export async function sendFriendRequest(requesterId, addresseeUsername) {
 export async function getIncomingFriendRequests(userId) {
   const { data, error } = await supabase
     .from('friend_requests')
-    .select('id, created_at, requester:profiles!friend_requests_requester_id_fkey(id, username)')
+    .select('id, created_at, requester:profiles!friend_requests_requester_id_fkey(id, username, character_id)')
     .eq('addressee_id', userId)
     .eq('status', 'pending')
   if (error) throw error
@@ -192,8 +208,8 @@ export async function getFriends(userId) {
   const { data, error } = await supabase
     .from('friend_requests')
     .select(
-      `requester:profiles!friend_requests_requester_id_fkey(id, username),
-       addressee:profiles!friend_requests_addressee_id_fkey(id, username)`,
+      `requester:profiles!friend_requests_requester_id_fkey(id, username, character_id),
+       addressee:profiles!friend_requests_addressee_id_fkey(id, username, character_id)`,
     )
     .eq('status', 'accepted')
     .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
@@ -216,7 +232,7 @@ export async function updateMyLocation(userId, lat, lng) {
 export async function getVisibleLocations() {
   const { data, error } = await supabase
     .from('live_locations')
-    .select('user_id, lat, lng, updated_at, profiles(username)')
+    .select('user_id, lat, lng, updated_at, profiles(username, character_id)')
   if (error) throw error
   return data
 }

@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from '../services/supabaseClient'
 import { FriendsPanel } from '../features/social/FriendsPanel'
 
 export function AddFriendPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   if (!isSupabaseConfigured) {
     return (
@@ -28,7 +28,7 @@ export function AddFriendPage() {
 
   return (
     <section className="page">
-      <FriendsPanel userId={user.id} />
+      <FriendsPanel userId={user.id} profile={profile} />
     </section>
   )
 }
