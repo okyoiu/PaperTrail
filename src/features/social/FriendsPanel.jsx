@@ -7,6 +7,7 @@ import {
   respondToFriendRequest,
   sendFriendRequest,
 } from '../backend/api'
+import { useAchievements } from '../../hooks/useAchievements'
 import { CharacterFigure } from './CharacterFigure'
 
 // Add/accept friends. A friend only shows up on the map once they're in the
@@ -17,6 +18,7 @@ export function FriendsPanel({ userId, profile }) {
   const [friends, setFriends] = useState([])
   const [incoming, setIncoming] = useState([])
   const [message, setMessage] = useState(null)
+  const { checkAchievements } = useAchievements()
 
   async function refresh() {
     setFriends(await getFriends(userId))
@@ -42,6 +44,8 @@ export function FriendsPanel({ userId, profile }) {
   async function handleRespond(requestId, accept) {
     await respondToFriendRequest(requestId, accept)
     refresh()
+    // A first accepted friend earns an achievement.
+    if (accept) checkAchievements()
   }
 
   const named = profile && hasChosenUsername(profile)

@@ -11,6 +11,7 @@
     "check-backend": "node --env-file=.env scripts/check-backend.mjs"
   },
   "dependencies": {
+    "@fontsource/darumadrop-one": "^5.3.0",
     "@fontsource/fredoka": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@supabase/supabase-js": "^2.116.0",

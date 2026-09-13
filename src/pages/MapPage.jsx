@@ -11,6 +11,7 @@ import { POI_LEGEND } from '../features/map/gameStyle'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
 import { CharacterQuickPick } from '../features/social/CharacterQuickPick'
+import { useAchievements } from '../hooks/useAchievements'
 import { useAuth } from '../hooks/useAuth'
 import { useCharacterTrail } from '../hooks/useCharacterTrail'
 import { useDebugPosition } from '../hooks/useDebugPosition'
@@ -34,6 +35,7 @@ const LEGEND = [
 
 export function MapPage() {
   const { user, profile, setProfile } = useAuth()
+  const { checkAchievements } = useAchievements()
   const userId = user?.id
   const { visits, placeError, clearVisits, markVisitReviewed } = useVisitTracker()
   const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
@@ -56,12 +58,12 @@ export function MapPage() {
       author: review.author ?? (profile ? displayName(profile) : 'You'),
       characterId: review.characterId ?? profile?.character_id,
     })
-  const [previewXp, setPreviewXp] = useState(DEV_PREVIEW_XP)
-  const hudXp = profile?.xp ?? previewXp
-  // Dev preview (?xp=...): tap the bar to add a review's worth of XP, e.g. to
-  // try the level-up chevron.
-  const addPreviewXp =
-    !profile && previewXp != null ? () => setPreviewXp((xp) => xp + REVIEW_XP_AWARD) : undefined
+  // The debug menu's "+XP" button (and ?xp=<n> in dev) sets a display-only XP
+  // that overrides the profile's, to try the bar and level-up without earning
+  // anything. Nothing is saved; a reload goes back to the real XP.
+  const [debugXp, setDebugXp] = useState(DEV_PREVIEW_XP)
+  const hudXp = debugXp ?? profile?.xp ?? null
+  const addDebugXp = () => setDebugXp((xp) => (xp ?? profile?.xp ?? 0) + REVIEW_XP_AWARD)
 
   useEffect(() => {
     if (!userId) return
@@ -129,6 +131,8 @@ export function MapPage() {
     }
     setSelectedLocation(null)
     closeReview()
+    // A first review, or a third photo, earns an achievement.
+    checkAchievements()
   }
 
   return (
@@ -146,9 +150,10 @@ export function MapPage() {
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
         onOpenReview={openReceipt}
+        onDebugAddXp={addDebugXp}
       />
 
-      <XpBar xp={hudXp} onClick={addPreviewXp} />
+      <XpBar xp={hudXp} />
 
       <div className="map-hud">
         <InstallPrompt />

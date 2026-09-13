@@ -17,7 +17,7 @@ new Image().src = LEVEL_UP_SRC
 // backend configured), which shows an empty bar and a "Lv. ##" placeholder.
 // On a level-up the bar shows full (still at the old level) for a second, then
 // resets to the new level, while a chevron pops up to its right and fades away.
-export function XpBar({ xp, onClick }) {
+export function XpBar({ xp }) {
   const known = xp != null
   const level = known ? levelForXp(xp) : null
   const progress = known ? `${xpIntoCurrentLevel(xp)}/${XP_PER_LEVEL} XP` : 'Sign in to earn XP'
@@ -49,7 +49,7 @@ export function XpBar({ xp, onClick }) {
   const shownLevel = filling ? completedLevel : known ? level : '##'
 
   return (
-    <div className="xp-bar" title={progress} onClick={onClick}>
+    <div className="xp-bar" title={progress}>
       <img className="xp-bar-frame" src={frameSrc(frame)} alt={progress} />
       <span className="xp-bar-level">Lv. {shownLevel}</span>
       {levelUp > 0 && (
@@ -61,28 +61,6 @@ export function XpBar({ xp, onClick }) {
           onAnimationEnd={() => setLevelUp(0)}
         />
       )}
-
-      {/* Turns the level card's white fill into a paper scrap like the frame's
-          card: ragged edges, faint grain, and a soft pencil-shaded shadow. */}
-      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-        <filter id="xp-paper" x="-20%" y="-40%" width="140%" height="180%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="7" result="edgeNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="edgeNoise" scale="4" result="rough" />
-          <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="2" result="grain" />
-          <feColorMatrix
-            in="grain"
-            type="matrix"
-            values="0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0 0.45  0 0 0 0.14 0"
-            result="greyGrain"
-          />
-          <feComposite in="greyGrain" in2="rough" operator="in" result="grainOnPaper" />
-          <feMerge result="paper">
-            <feMergeNode in="rough" />
-            <feMergeNode in="grainOnPaper" />
-          </feMerge>
-          <feDropShadow in="paper" dx="0" dy="1" stdDeviation="1.2" floodColor="#000" floodOpacity="0.35" />
-        </filter>
-      </svg>
     </div>
   )
 }

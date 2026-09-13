@@ -1,3 +1,6 @@
+import { REVIEW_XP_AWARD } from '../game/xp'
+import { useAchievements } from '../../hooks/useAchievements'
+
 // Debug-only: fake the player's GPS position so the fog-of-war reveal can be
 // tested without physically walking to campus. Overrides real geolocation
 // until "Use real GPS" is pressed again.
@@ -6,10 +9,23 @@ export const TELEPORT_PRESETS = [
   { name: 'Rice Village', lat: 29.716, lng: -95.4165 },
 ]
 
+const progressButtonStyle = {
+  flex: 1,
+  background: 'transparent',
+  color: '#e4ece8',
+  border: '1px solid #2b424c',
+  borderRadius: 5,
+  padding: '4px 8px',
+  cursor: 'pointer',
+}
+
 // Opened by the bug-icon map control (see debugToggleControl.js), and closes
-// again after each action, because the open panel covers a large part of the
-// map (including buildings you'd click).
-export function TeleportControls({ active, onTeleport, onUseRealGps, onRevealAll, onClose }) {
+// again after each teleport/reveal, because the open panel covers a large part
+// of the map (including buildings you'd click). The progress buttons leave it
+// open so they can be pressed repeatedly; both are display-only.
+export function TeleportControls({ active, onTeleport, onUseRealGps, onRevealAll, onAddXp, onClose }) {
+  const { previewAchievement } = useAchievements()
+
   function runAndClose(action) {
     action()
     onClose()
@@ -21,6 +37,7 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onRevealAll
         position: 'absolute',
         top: 'calc(var(--safe-top, 0px) + var(--xp-corner-h, 0px) + 8px)', // below MapPage's XP bar
         left: 8,
+        maxWidth: 240, // clear of the camera buttons on the right
         zIndex: 10,
         pointerEvents: 'auto',
         display: 'flex',
@@ -82,6 +99,25 @@ export function TeleportControls({ active, onTeleport, onUseRealGps, onRevealAll
       >
         Reveal all buildings
       </button>
+      <strong style={{ marginTop: 4 }}>Debug: progress</strong>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          type="button"
+          onClick={onAddXp}
+          title="Display only - grows the XP bar without saving anything"
+          style={progressButtonStyle}
+        >
+          +{REVIEW_XP_AWARD} XP
+        </button>
+        <button
+          type="button"
+          onClick={previewAchievement}
+          title="Display only - plays the next achievement toast"
+          style={progressButtonStyle}
+        >
+          Show achievement
+        </button>
+      </div>
       <span style={{ color: '#8a9aa1', fontSize: 11 }}>
         Click a building or your character to review; click elsewhere to walk there
       </span>

@@ -165,18 +165,20 @@ code {
   margin-left: 7.5%;
   padding: 3px 12px;
   color: #111;
-  font: 700 15px/1.4 'JetBrains Mono', ui-monospace, monospace;
+  /* Darumadrop One only comes in one weight (400), so it runs a size up. */
+  font: 400 17px/1.3 'Darumadrop One', 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* The paper scrap behind the text, roughened by XpBar's #xp-paper filter. It's
-   a pseudo-element so the filter leaves the text crisp. */
+/* The paper scrap behind the text, roughened by the #paper-scrap filter
+   (components/PaperFilter.jsx). It's a pseudo-element so the filter leaves
+   the text crisp. */
 .xp-bar-level::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   background: #fff;
-  filter: url(#xp-paper);
+  filter: url(#paper-scrap);
 }
 
 /* Level-up chevron (see XpBar): sits just right of the bar, roughly its
@@ -226,6 +228,98 @@ code {
   }
   10%,
   83% {
+    opacity: 1;
+  }
+}
+
+/* --- Achievement toast (see game/AchievementToast.jsx) -------------------- */
+
+/* Centered over whichever page is showing, above the sheets, nav, and photo
+   viewer (z-index 15-40). Centered with `translate` so the animation can own
+   `transform`. */
+.achievement-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  z-index: 50;
+  isolation: isolate; /* keeps the ::before paper behind the content */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  padding: 12px 18px 12px 12px;
+  cursor: pointer;
+  animation: achievement-toast 3.2s ease-out forwards; /* 3.2s = TOAST_MS */
+}
+
+/* The paper card behind it, roughened by the #paper-scrap filter. */
+.achievement-toast::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 16px;
+  background: var(--paper-card);
+  filter: url(#paper-scrap);
+}
+
+/* Fixed box: the icons' artwork has different shapes. They're drawn on white,
+   so multiplying them onto the paper card turns that white into the card's
+   color (grain and all) without editing the art. */
+.achievement-toast-icon {
+  flex: none;
+  width: 76px;
+  height: 64px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.achievement-toast-text {
+  margin: 0;
+  font: 400 15px/1.3 'Darumadrop One', var(--heading);
+  color: var(--ink-soft);
+}
+
+.achievement-toast-title {
+  font-size: 22px;
+  color: var(--ink);
+}
+
+@keyframes achievement-toast {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  16%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .achievement-toast {
+    animation-name: achievement-toast-fade;
+  }
+}
+
+@keyframes achievement-toast-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  8%,
+  85% {
     opacity: 1;
   }
 }

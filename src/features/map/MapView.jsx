@@ -117,6 +117,7 @@ export function MapView({
   onSelectLocation,
   onReviewHere,
   onOpenReview,
+  onDebugAddXp,
 }) {
   const containerRef = useRef(null)
   const [map, setMap] = useState(null)
@@ -523,6 +524,7 @@ export function MapView({
           onTeleport={handleTeleport}
           onUseRealGps={handleUseRealGps}
           onRevealAll={handleRevealAll}
+          onAddXp={onDebugAddXp}
           onClose={() => setDebugOpen(false)}
         />
       )}
