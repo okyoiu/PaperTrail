@@ -119,18 +119,98 @@ code {
   background: var(--code-bg);
 }
 
-/* --- Game UI: XP badge, install prompt, location review flow ------------ */
+/* --- Game UI: XP bar, install prompt, location review flow -------------- */
 
-.xp-badge {
+/* See game/XpBar.jsx: a hand-drawn loading-bar frame with the level in a
+   white card underneath. */
+.xp-bar {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 13px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* Fixed aspect ratio: the frames' artwork sizes differ slightly, so this keeps
+   the bar from jumping when it steps to the next frame. */
+.xp-bar-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 847 / 252;
+  object-fit: contain;
+}
+
+/* The margin lines it up with the drawn bar's left edge, which sits ~7.5% in
+   from the edge of the frame artwork. */
+.xp-bar-level {
+  position: relative;
+  isolation: isolate; /* keeps the ::before paper behind the text, not the map */
+  margin-left: 7.5%;
+  padding: 3px 12px;
+  color: #111;
+  font: 700 15px/1.4 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* The paper scrap behind the text, roughened by XpBar's #xp-paper filter. It's
+   a pseudo-element so the filter leaves the text crisp. */
+.xp-bar-level::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #fff;
+  filter: url(#xp-paper);
+}
+
+/* Level-up chevron (see XpBar): sits just right of the bar, roughly its
+   height (percentages here are of the bar's width). Pops in, holds until 2s,
+   then fades out. */
+.xp-bar-level-up {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 6px);
+  width: 26%;
+  margin-top: 2%;
+  aspect-ratio: 1122 / 1102;
+  pointer-events: none;
+  animation: xp-level-up 2.4s ease-out forwards;
+}
+
+@keyframes xp-level-up {
+  0% {
+    opacity: 0;
+    transform: translateY(30%) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-8%) scale(1.1);
+  }
+  20%,
+  83% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-25%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-bar-level-up {
+    animation-name: xp-level-up-fade;
+  }
+}
+
+@keyframes xp-level-up-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  83% {
+    opacity: 1;
+  }
 }
 
 .install-button,
@@ -792,18 +872,12 @@ code {
   overflow-wrap: anywhere;
 }
 
-.xp-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.12);
-  overflow: hidden;
-}
-
-.xp-bar-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--avatar-accent, #e8a33d);
-  transition: width 0.4s ease-out;
+/* The player card reuses the HUD's hand-drawn XP bar (game/XpBar.jsx), so its
+   sizing lives with the .xp-bar rules near the top of this file. Give it room
+   to breathe inside the card. */
+.player-card .xp-bar {
+  width: 100%;
+  margin: 4px 0 2px;
 }
 
 .sign-in-links {
