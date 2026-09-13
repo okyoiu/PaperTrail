@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 // Debug-only: fake the player's GPS position so the fog-of-war reveal can be
 // tested without physically walking to campus. Overrides real geolocation
 // until "Use real GPS" is pressed again.
@@ -8,54 +6,35 @@ export const TELEPORT_PRESETS = [
   { name: 'Rice Village', lat: 29.716, lng: -95.4165 },
 ]
 
-const panelStyle = {
-  position: 'absolute',
-  top: 8,
-  left: 8,
-  zIndex: 10,
-  pointerEvents: 'auto',
-  background: 'rgba(16,27,33,0.85)',
-  border: '1px solid #2b424c',
-  borderRadius: 8,
-  fontSize: 12,
-  color: '#e4ece8',
-}
-
-// Collapsed by default, and collapses again after each action, because the
-// open panel covers a large part of the map (including buildings you'd click).
-export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateExplored }) {
-  const [open, setOpen] = useState(false)
-
+// Opened by the bug-icon map control (see debugToggleControl.js), and closes
+// again after each action, because the open panel covers a large part of the
+// map (including buildings you'd click).
+export function TeleportControls({ active, onTeleport, onUseRealGps, onSimulateExplored, onClose }) {
   function runAndClose(action) {
     action()
-    setOpen(false)
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        style={{ ...panelStyle, padding: '4px 10px', cursor: 'pointer' }}
-      >
-        Debug{active ? `: ${active.name}` : ''} ▾
-      </button>
-    )
+    onClose()
   }
 
   return (
-    <div style={{ ...panelStyle, display: 'flex', flexDirection: 'column', gap: 4, padding: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <strong>Debug: teleport</strong>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Close debug panel"
-          style={{ background: 'transparent', color: '#e4ece8', border: 'none', cursor: 'pointer' }}
-        >
-          ✕
-        </button>
-      </div>
+    <div
+      style={{
+        position: 'absolute',
+        top: 'calc(var(--safe-top, 0px) + 8px)',
+        left: 8,
+        zIndex: 10,
+        pointerEvents: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        background: 'rgba(16,27,33,0.85)',
+        border: '1px solid #2b424c',
+        borderRadius: 8,
+        padding: 8,
+        fontSize: 12,
+        color: '#e4ece8',
+      }}
+    >
+      <strong>Debug: teleport</strong>
       {TELEPORT_PRESETS.map((preset) => (
         <button
           key={preset.name}
