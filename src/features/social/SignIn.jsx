@@ -1,21 +1,19 @@
 import { useId, useState } from 'react'
-import { signInWithEmail, verifyEmailCode } from '../backend/api'
+import { signInWithEmail } from '../backend/api'
 import { CHARACTERS, getCharacter } from '../map/characters'
 import { CharacterFigure } from './CharacterFigure'
 import { CharacterPicker } from './CharacterPicker'
 import { getPendingCharacterId, setPendingCharacterId } from './pendingCharacter'
 
-// Character-select style sign-in: pick the explorer you'll walk the map as,
-// then enter your email. Supabase sends one email holding a magic link and a
-// 6-digit code; typing the code here signs in without leaving the page (or
-// the installed PWA), and the link still works as a fallback. The chosen
-// explorer is written to the profile once the session arrives (see
-// pendingCharacter.js).
+// Character-select sign-in: pick the explorer you'll walk the map as, then get
+// a magic link by email. Tapping the link signs you in and returns here; the
+// chosen explorer is written to the profile once the session arrives (see
+// pendingCharacter.js). Kept link-only on purpose - the 6-digit code path
+// needs a custom email template that isn't set up.
 export function SignIn() {
   const [characterId, setCharacterId] = useState(() => getPendingCharacterId() ?? CHARACTERS[0].id)
   const [email, setEmail] = useState('')
-  const [sentTo, setSentTo] = useState(null) // the address the code went to
-  const [code, setCode] = useState('')
+  const [sentTo, setSentTo] = useState(null) // the address the link went to
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const pickerLabelId = useId()
@@ -33,21 +31,6 @@ export function SignIn() {
     try {
       await signInWithEmail(email)
       setSentTo(email)
-      setCode('')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleVerify(event) {
-    event.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      // On success the auth listener in AuthProvider swaps this screen out.
-      await verifyEmailCode(sentTo, code)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -67,41 +50,22 @@ export function SignIn() {
 
   if (sentTo) {
     return (
-      <form className="sign-in" onSubmit={handleVerify}>
+      <div className="sign-in">
         {hero}
         <p>
-          We emailed <strong>{sentTo}</strong>. Enter the 6-digit code from that email, or tap the link
-          in it.
+          We emailed a sign-in link to <strong>{sentTo}</strong>. Tap it to sign in as{' '}
+          {character.name}, then come back to this page.
         </p>
-        <label>
-          Sign-in code
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9]*"
-            placeholder="123456"
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
-            minLength={6}
-            maxLength={10}
-            required
-            autoFocus
-          />
-        </label>
-        <button type="submit" disabled={busy || code.length < 6}>
-          {busy ? 'Signing in…' : `Play as ${character.name}`}
-        </button>
         <div className="sign-in-links">
           <button type="button" className="link-button" onClick={handleSend} disabled={busy}>
-            Resend email
+            {busy ? 'Sending…' : 'Resend link'}
           </button>
           <button type="button" className="link-button" onClick={() => setSentTo(null)} disabled={busy}>
             Use a different email
           </button>
         </div>
         {error && <p className="review-form-error">{error}</p>}
-      </form>
+      </div>
     )
   }
 
@@ -127,7 +91,7 @@ export function SignIn() {
         />
       </label>
       <button type="submit" disabled={busy}>
-        {busy ? 'Sending…' : 'Email me a sign-in code'}
+        {busy ? 'Sending…' : 'Email me a sign-in link'}
       </button>
       {error && <p className="review-form-error">{error}</p>}
     </form>
