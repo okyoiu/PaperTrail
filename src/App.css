@@ -106,6 +106,12 @@
   font-size: 0.85rem;
 }
 
+/* A visit the character hasn't walked to yet (see hooks/useCharacterTrail.js). */
+.visit-locked {
+  color: #71717a;
+  font-size: 0.85rem;
+}
+
 /* --- Immersive map: edge-to-edge under the notch / Dynamic Island ------- */
 
 .app-content--immersive {
@@ -207,4 +213,76 @@
 
 .map-sheet-header h2 {
   margin: 0;
+}
+
+/* --- Review photos: tap to view larger (see game/ReviewViewer.jsx) ------- */
+
+.review-photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: zoom-in;
+}
+
+/* Above the details sheet, bottom cards, and notch blur (z-index 15-30). */
+.review-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-top)) 16px 16px;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.review-viewer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  color: #fff;
+}
+
+.review-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-viewer-close {
+  margin-left: auto;
+  flex: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.review-viewer img {
+  display: block;
+  width: 100%;
+  max-height: 65dvh;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.review-viewer-stars {
+  color: #f59e0b;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.review-viewer p {
+  margin: 0;
+  line-height: 1.45;
 }

@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom'
 import { getMyReviews } from '../features/backend/api'
 import LocationCard from '../features/game/LocationCard'
 import ReviewForm from '../features/game/ReviewForm'
+import ReviewViewer from '../features/game/ReviewViewer'
 import { levelForXp } from '../features/game/xp'
 import { MapView } from '../features/map/MapView'
 import InstallPrompt from '../features/mobile/InstallPrompt'
 import { useAuth } from '../hooks/useAuth'
+import { useCharacterTrail } from '../hooks/useCharacterTrail'
 import { useDebugPosition } from '../hooks/useDebugPosition'
 import { useFriendsMap } from '../hooks/useFriendsMap'
 import { useVisitTracker } from '../hooks/useVisitTracker'
@@ -22,11 +24,16 @@ export function MapPage() {
   const { visits, placeError, clearVisits, markVisitReviewed } = useVisitTracker()
   const { position, debugPreset, setDebugPosition, geoError } = useDebugPosition()
   const { friends } = useFriendsMap(userId, position)
+  // Reviews are only allowed where the character has been (real GPS or
+  // tap-to-walk) - see features/map/characterTrail.js.
+  const { hasVisited } = useCharacterTrail()
   const [reviews, setReviews] = useState([])
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [reviewingLocation, setReviewingLocation] = useState(null)
   const [reviewingVisitId, setReviewingVisitId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // The review whose photo is open full screen (see ReviewViewer).
+  const [viewingReview, setViewingReview] = useState(null)
 
   useEffect(() => {
     if (!userId) return
@@ -40,8 +47,8 @@ export function MapPage() {
     setReviewingLocation(location)
   }
 
-  // From tapping your own dot. Spots with no named building nearby get a
-  // Google place name when there is one.
+  // From tapping your own character, so always somewhere it's standing. Spots
+  // with no named building nearby get a Google place name when there is one.
   async function openReviewHere(place) {
     setSelectedLocation(null)
     setReviewingVisitId(null)
@@ -102,6 +109,7 @@ export function MapPage() {
         reviews={reviews}
         onSelectLocation={user ? setSelectedLocation : undefined}
         onReviewHere={user ? openReviewHere : undefined}
+        onOpenReview={setViewingReview}
       />
 
       <div className="map-hud">
@@ -142,8 +150,8 @@ export function MapPage() {
           <section className="explore">
             <h2>Explore (fog of war)</h2>
             <p>
-              Walk toward a building and it reveals in 3D; tap a building or your character to
-              leave a review and earn XP.
+              Walk your character toward a building and it reveals in 3D. Once your character has
+              been there, tap the building or your character to leave a review and earn XP.
               {!user && (
                 <>
                   {' '}
@@ -178,14 +186,33 @@ export function MapPage() {
                       <div className="visit-checkin">
                         <span>{'★'.repeat(visit.rating)}{'☆'.repeat(5 - visit.rating)}</span>
                         {visit.reviewBody && <p>{visit.reviewBody}</p>}
-                        {visit.photoUrl && <img src={visit.photoUrl} alt="" />}
+                        {visit.photoUrl && (
+                          <button
+                            type="button"
+                            className="review-photo-button"
+                            aria-label="View photo larger"
+                            onClick={() =>
+                              setViewingReview({
+                                title: visit.name ?? visit.address ?? 'Unknown place',
+                                rating: visit.rating,
+                                body: visit.reviewBody,
+                                photoUrl: visit.photoUrl,
+                              })
+                            }
+                          >
+                            <img src={visit.photoUrl} alt="" />
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      user && (
+                      user &&
+                      (hasVisited(visit) ? (
                         <button type="button" onClick={() => openVisitCheckIn(visit)}>
                           Check in
                         </button>
-                      )
+                      ) : (
+                        <span className="visit-locked">Walk your character here to check in</span>
+                      ))
                     )}
                   </li>
                 ))}
@@ -206,10 +233,15 @@ export function MapPage() {
         selectedLocation && (
           <LocationCard
             location={selectedLocation}
+            canReview={selectedLocation.visited}
             onReview={openBuildingReview}
             onClose={() => setSelectedLocation(null)}
           />
         )
+      )}
+
+      {viewingReview && (
+        <ReviewViewer review={viewingReview} onClose={() => setViewingReview(null)} />
       )}
     </div>
   )

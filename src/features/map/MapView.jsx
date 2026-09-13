@@ -14,6 +14,7 @@ import {
 } from './buildingsLayer'
 import { CameraControls } from './CameraControls'
 import { characterSvg, getCharacter } from './characters'
+import { recordPosition } from './characterTrail'
 import { DebugToggleControl } from './debugToggleControl'
 import { FogOfWar } from './FogOfWar'
 import { createPlayerAvatar } from './playerAvatar'
@@ -62,7 +63,8 @@ function createElement(tag, className, text) {
 }
 
 // Built with textContent rather than innerHTML because review text is user input.
-function reviewPopupContent(name, reviews) {
+// With onOpenReview, each photo is a button that opens that review larger.
+function reviewPopupContent(name, reviews, onOpenReview) {
   const root = createElement('div', 'review-popup')
   root.append(createElement('strong', null, name))
   for (const review of reviews) {
@@ -77,7 +79,18 @@ function reviewPopupContent(name, reviews) {
       const img = createElement('img')
       img.src = review.photo_url
       img.alt = ''
-      item.append(img)
+      if (onOpenReview) {
+        const photoButton = createElement('button', 'review-photo-button')
+        photoButton.type = 'button'
+        photoButton.setAttribute('aria-label', 'View photo larger')
+        photoButton.addEventListener('click', () =>
+          onOpenReview({ title: name, rating: review.rating, body: review.body, photoUrl: review.photo_url }),
+        )
+        photoButton.append(img)
+        item.append(photoButton)
+      } else {
+        item.append(img)
+      }
     }
     root.append(item)
   }
@@ -100,7 +113,7 @@ function renderFriendMarker(element, username, character) {
 // The one map: MapLibre + 3D fog-of-war buildings, the player's character
 // (tap it to review where you're standing) with a camera that follows it,
 // accepted friends' characters, and a book icon on every place the player
-// has reviewed.
+// has reviewed (tapping a photo in its popup calls onOpenReview).
 export function MapView({
   userId,
   characterId,
@@ -112,6 +125,7 @@ export function MapView({
   reviews,
   onSelectLocation,
   onReviewHere,
+  onOpenReview,
 }) {
   const containerRef = useRef(null)
   const [map, setMap] = useState(null)
@@ -362,18 +376,26 @@ export function MapView({
       element.title = `You reviewed ${loc.name}`
       return new Marker({ element, anchor: 'bottom' })
         .setLngLat([loc.lng, loc.lat])
-        .setPopup(new Popup({ offset: 24, maxWidth: '240px' }).setDOMContent(reviewPopupContent(loc.name, reviewsHere)))
+        .setPopup(
+          new Popup({ offset: 24, maxWidth: '240px' }).setDOMContent(
+            reviewPopupContent(loc.name, reviewsHere, onOpenReview),
+          ),
+        )
         .addTo(map)
     })
-  }, [map, reviews])
+  }, [map, reviews, onOpenReview])
 
-  // Reveal buildings the player walks up to, and save that they've been visited.
+  // Add each move to the character's trail (see characterTrail.js) and reveal
+  // buildings anywhere along it - a walk unlocks the ones it passes, not just
+  // the one it stops at - saving that they've been visited.
   useEffect(() => {
     if (!map || !position) return
+    const path = recordPosition(position)
     for (const building of buildingsByIdRef.current.values()) {
       const id = building.id
       if (unlockedIdsRef.current.has(id)) continue
-      if (distanceMeters(building.properties.centroid, position) > UNLOCK_RADIUS_METERS) continue
+      const { centroid } = building.properties
+      if (!path.some((point) => distanceMeters(centroid, point) <= UNLOCK_RADIUS_METERS)) continue
 
       unlockedIdsRef.current.add(id)
       setBuildingUnlocked(map, id, true)
@@ -454,6 +476,9 @@ export function MapView({
       const building = hit && buildingsByIdRef.current.get(hit.id)
       if (building && onSelectLocation) {
         onSelectLocation({
+          // Unlocked = the character has walked here, which is what lets the
+          // player review it ("Simulate explored" only lights buildings up).
+          visited: unlockedIdsRef.current.has(hit.id),
           id: `osm:${hit.id}`,
           name: building.properties.name,
           lat: building.properties.centroid.lat,

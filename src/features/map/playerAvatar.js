@@ -4,7 +4,7 @@ import { characterSvg, getCharacter } from './characters'
 
 // Farther than this between two fixes is a jump (a debug teleport, or GPS
 // coming back after a gap), so the character appears there instead of walking.
-const TELEPORT_METERS = 200
+export const TELEPORT_METERS = 200
 // Each walk between fixes lasts about as long as the gap since the previous
 // fix, so steady ~1Hz GPS reads as continuous walking instead of hop-pause-hop.
 const MIN_GLIDE_MS = 300
